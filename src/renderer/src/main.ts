@@ -40,6 +40,7 @@ const sky = setupSkyView(
     moon: byId('sky-moon'),
     place: byId('sky-place'),
     coords: byId('sky-coords'),
+    terrain: byId('sky-terrain'),
     stage: byId('sky-stage'),
     frame: byId('sky-frame'),
     canvas: byId('sky-canvas'),

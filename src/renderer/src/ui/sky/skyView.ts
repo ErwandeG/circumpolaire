@@ -14,6 +14,7 @@ import {
   type FrameOrientation
 } from '../../domain/optics'
 import { formatParisTime, parisDayOf, parisTime, type CalendarDay } from '../../domain/time'
+import { loadTerrain } from '../../services/terrainService'
 import { SkyScene } from './scene'
 
 export interface Observer {
@@ -29,6 +30,7 @@ interface SkyElements {
   moon: HTMLButtonElement
   place: HTMLElement
   coords: HTMLElement
+  terrain: HTMLElement
   stage: HTMLElement
   frame: HTMLElement
   canvas: HTMLCanvasElement
@@ -277,6 +279,39 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     if (!el.root.hidden) layout()
   }).observe(el.stage)
 
+  function showCoords(): void {
+    el.coords.textContent = `${state.observer.lat.toFixed(5)}° N, ${state.observer.lon.toFixed(5)}° E · œil à 1,70 m`
+  }
+
+  let terrainRequest = 0
+  async function loadBuildings(): Promise<void> {
+    const id = ++terrainRequest
+    scene.setTerrain(null)
+    el.terrain.textContent = 'Chargement des bâtiments et du relief (LiDAR HD)…'
+    delete el.terrain.dataset.tone
+    const res = await loadTerrain(state.observer.lat, state.observer.lon)
+    if (id !== terrainRequest) return // une autre vue a été ouverte entre-temps
+    if (res.status === 'error') {
+      el.terrain.textContent = `${res.message} Horizon plat.`
+      el.terrain.dataset.tone = 'error'
+      draw()
+      return
+    }
+    const parts = [`${res.buildingCount} bâtiment${res.buildingCount > 1 ? 's' : ''} dans les 60 m`]
+    if (res.mesh.fallbackShare > 0.01) {
+      parts.push(`${Math.round(res.mesh.fallbackShare * 100)} % sans LiDAR (volumes BD TOPO en orange)`)
+    }
+    if (res.movedM > 0) {
+      parts.push(`point déplacé de ${fmt1(res.movedM)} m pour sortir du bâtiment`)
+      state.observer = { ...state.observer, lat: res.lat, lon: res.lon }
+      showCoords()
+      recomputeSky()
+    }
+    el.terrain.textContent = parts.join(' · ')
+    scene.setTerrain(res.mesh)
+    draw()
+  }
+
   return {
     open(observer, night) {
       state.observer = observer
@@ -284,12 +319,13 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       const w = nightWindow(night, observer.lat, observer.lon)
       state.start = w.kind === 'none' ? parisTime(night, 23) : new Date(Math.ceil(w.start.getTime() / 60_000) * 60_000)
       el.place.textContent = observer.label
-      el.coords.textContent = `${observer.lat.toFixed(5)}° N, ${observer.lon.toFixed(5)}° E · œil à 1,70 m`
+      showCoords()
       el.root.hidden = false
       syncInputs()
       recomputeSky()
       aimAtPole()
       layout()
+      void loadBuildings()
     }
   }
 }

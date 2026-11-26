@@ -30,7 +30,9 @@ src/renderer/index.html   page de l'appli
 src/renderer/src/
   domain/                 logique pure, testée sans interface
   services/               accès externes (IGN) et stockage local
-  domain/astro/           fenêtre de nuit, Lune (astronomy-engine)
+  domain/astro/           fenêtre de nuit, Lune, ciel (astronomy-engine)
+  domain/geo/             Lambert 93, emprises de bâtiments
+  domain/terrain.ts       surface 3D à partir du MNS/MNT LiDAR HD
   data/                   catalogue d'étoiles
   ui/                     carte, recherche, calendrier
   ui/sky/                 vue du ciel (three.js)
@@ -42,5 +44,5 @@ scripts/                  génération du catalogue
 - [x] Jalon 1 : socle, carte et lieu
 - [x] Jalon 2 : calendrier lunaire (tests contre les éphémérides IMCCE, tolérance 2 min)
 - [x] Jalon 3 : ciel à hauteur d'homme (sans bâtiments)
-- [ ] Jalon 4 : bâtiments, arbres et relief (LiDAR HD)
+- [x] Jalon 4 : bâtiments, arbres et relief (LiDAR HD, BD TOPO en repli)
 - [ ] Jalon 5 : finitions

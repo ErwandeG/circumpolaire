@@ -70,6 +70,11 @@ body {
   border-right: 1px solid var(--border);
 }
 
+/* Le panneau défile : ses blocs gardent leur hauteur au lieu d'être écrasés. */
+.panel > * {
+  flex-shrink: 0;
+}
+
 .app-title {
   margin: 0;
   font-size: 20px;
@@ -424,6 +429,36 @@ body {
 
 .sky {
   grid-template-rows: auto 1fr auto auto auto;
+}
+
+.sky-legend {
+  margin-right: 10px;
+  white-space: nowrap;
+}
+
+.lg {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  border-radius: 2px;
+}
+
+.lg-building {
+  background: rgb(107 115 128);
+}
+
+.lg-vegetation {
+  background: rgb(51 84 56);
+}
+
+.lg-fallback {
+  background: rgb(158 102 51);
+}
+
+#sky-terrain[data-tone='error'] {
+  color: #fca5a5;
 }
 
 .detail-action {

@@ -1,5 +1,14 @@
 import * as THREE from 'three'
 import type { Enu, MoonState, StarRow } from '../../domain/astro/sky'
+import { SurfaceKind, type TerrainMesh } from '../../domain/terrain'
+
+/** Couleurs de la surface : sol, bâtiment, végétation, volume BD TOPO de repli. */
+export const SURFACE_COLORS: Record<number, [number, number, number]> = {
+  [SurfaceKind.Ground]: [0.16, 0.18, 0.21],
+  [SurfaceKind.Building]: [0.42, 0.45, 0.5],
+  [SurfaceKind.Vegetation]: [0.2, 0.33, 0.22],
+  [SurfaceKind.Fallback]: [0.62, 0.4, 0.2]
+}
 
 /**
  * Rendu three.js de la vue à hauteur d'homme.
@@ -223,6 +232,8 @@ export class SkyScene {
       const a = (az * Math.PI) / 180
       s.position.set(Math.sin(a) * SKY_RADIUS, SKY_RADIUS * Math.sin((0.8 * Math.PI) / 180), -Math.cos(a) * SKY_RADIUS)
       s.center.set(0.5, 0)
+      // Les points cardinaux passent derrière les bâtiments.
+      s.material.depthTest = true
       this.labels.push(s)
       this.scene.add(s)
     }
@@ -367,6 +378,47 @@ export class SkyScene {
     )
     this.moonTrail.frustumCulled = false
     this.scene.add(this.moonTrail)
+  }
+
+  private terrain?: THREE.Mesh
+
+  /**
+   * Surface LiDAR (bâtiments, arbres, relief). Opaque : elle cache étoiles, filés et Lune.
+   * Ombrage calculé à partir des normales, indépendant de l'éclairage (de nuit, le Soleil
+   * ne doit pas éclairer les façades).
+   */
+  setTerrain(mesh: TerrainMesh | null): void {
+    if (this.terrain) {
+      this.scene.remove(this.terrain)
+      this.terrain.geometry.dispose()
+      ;(this.terrain.material as THREE.Material).dispose()
+      this.terrain = undefined
+    }
+    if (!mesh) return
+    const geom = new THREE.BufferGeometry()
+    geom.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3))
+    geom.setIndex(new THREE.BufferAttribute(mesh.indices, 1))
+    geom.computeVertexNormals()
+    const normals = geom.getAttribute('normal')
+    const colors = new Float32Array(mesh.kinds.length * 3)
+    const tmp = new THREE.Color()
+    for (let i = 0; i < mesh.kinds.length; i++) {
+      const [r, g, b] = SURFACE_COLORS[mesh.kinds[i]] ?? SURFACE_COLORS[SurfaceKind.Ground]
+      // Toits clairs, façades plus ou moins sombres selon leur orientation.
+      const nx = normals.getX(i)
+      const ny = normals.getY(i)
+      const nz = normals.getZ(i)
+      const shade = 0.45 + 0.4 * Math.max(0, ny) + 0.15 * Math.max(0, -nx * 0.6 - nz * 0.8)
+      // Couleurs pensées en sRGB, converties dans l'espace linéaire de three.js.
+      tmp.setRGB(r * shade, g * shade, b * shade, THREE.SRGBColorSpace)
+      colors[i * 3] = tmp.r
+      colors[i * 3 + 1] = tmp.g
+      colors[i * 3 + 2] = tmp.b
+    }
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+    this.terrain = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }))
+    this.terrain.renderOrder = -1
+    this.scene.add(this.terrain)
   }
 
   /** Oriente la caméra : azimut et hauteur du centre du cadre, champ vertical, rapport largeur/hauteur. */
