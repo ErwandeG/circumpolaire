@@ -275,6 +275,7 @@ export function buildTerrain(
       bld.elevations.push(hdMesh.elevations[i])
       bld.indices.push(n0 + i)
     }
+    for (let i = 0; i < hdMesh.lines.length; i++) bld.lines.push(hdMesh.lines[i])
   }
 
   // Assemblage sol + bâtiments dans un seul maillage.
@@ -466,7 +467,7 @@ function hdGeometry(
   radius: number,
   toScene: (x: number, y: number, h: number) => [number, number, number],
   groundAltitude: (x: number, y: number) => number
-): { positions: Float32Array; kinds: Uint8Array; elevations: Float32Array; count: number } {
+): { positions: Float32Array; kinds: Uint8Array; elevations: Float32Array; count: number; lines: number[] } {
   const o = toScene(observer.x, observer.y, 0)
   const ex = toScene(observer.x + 100, observer.y, 0)
   const ey = toScene(observer.x, observer.y + 100, 0)
@@ -492,6 +493,60 @@ function hdGeometry(
     positions: Float32Array.from(positions),
     kinds: new Uint8Array(count).fill(SurfaceKind.Building),
     elevations: Float32Array.from(elevations),
-    count
+    count,
+    lines: featureEdges(positions)
   }
+}
+
+/** Pli au-delà duquel une arête est soulignée (cos 30°) : les diagonales d'une face plane ne le sont pas. */
+const CREASE_COS = Math.cos((30 * Math.PI) / 180)
+
+/**
+ * Arêtes à souligner d'une soupe de triangles (trois sommets par triangle) : plis marqués entre deux faces
+ * voisines, et bords libres. Sommets identifiés au centimètre ; l'orientation des faces est ignorée.
+ * Renvoie des segments [x1, y1, z1, x2, y2, z2] à la suite, comme les arêtes des bâtiments reconstruits.
+ */
+export function featureEdges(p: ArrayLike<number>): number[] {
+  const ids = new Map<string, number>()
+  const vid = (k: number) => {
+    const key = `${Math.round(p[k] * 100)},${Math.round(p[k + 1] * 100)},${Math.round(p[k + 2] * 100)}`
+    let id = ids.get(key)
+    if (id === undefined) {
+      id = ids.size
+      ids.set(key, id)
+    }
+    return id
+  }
+  // Arête → première face vue (normale) et ses extrémités ; null une fois l'arête tranchée.
+  const edges = new Map<number, { nx: number; ny: number; nz: number; a: number; b: number; open: boolean } | null>()
+  const out: number[] = []
+  const push = (a: number, b: number) => out.push(p[a], p[a + 1], p[a + 2], p[b], p[b + 1], p[b + 2])
+  for (let t = 0; t + 8 < p.length; t += 9) {
+    const ux = p[t + 3] - p[t], uy = p[t + 4] - p[t + 1], uz = p[t + 5] - p[t + 2]
+    const vx = p[t + 6] - p[t], vy = p[t + 7] - p[t + 1], vz = p[t + 8] - p[t + 2]
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx
+    const len = Math.hypot(nx, ny, nz)
+    if (len < 1e-9) continue
+    nx /= len
+    ny /= len
+    nz /= len
+    const v = [vid(t), vid(t + 3), vid(t + 6)]
+    for (let e = 0; e < 3; e++) {
+      const a = t + e * 3
+      const b = t + ((e + 1) % 3) * 3
+      const i = v[e]
+      const j = v[(e + 1) % 3]
+      if (i === j) continue
+      const key = i < j ? i * 0x4000000 + j : j * 0x4000000 + i
+      const seen = edges.get(key)
+      if (seen === undefined) edges.set(key, { nx, ny, nz, a, b, open: true })
+      else if (seen) {
+        seen.open = false
+        if (Math.abs(seen.nx * nx + seen.ny * ny + seen.nz * nz) < CREASE_COS) push(seen.a, seen.b)
+        edges.set(key, null)
+      }
+    }
+  }
+  for (const e of edges.values()) if (e && e.open) push(e.a, e.b)
+  return out
 }

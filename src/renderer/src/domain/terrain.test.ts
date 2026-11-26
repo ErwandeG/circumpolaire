@@ -141,3 +141,26 @@ describe('zone chargée', () => {
     expect(obs.y - e.minY).toBeCloseTo(150, 0)
   })
 })
+
+describe('arêtes des bâtiments HD', () => {
+  it('souligne les 12 arêtes d’un cube, pas les diagonales de ses faces', async () => {
+    const { featureEdges } = await import('./terrain')
+    // Cube de 10 m, chaque face en deux triangles (orientations volontairement mélangées).
+    const c = (x: number, y: number, z: number) => [x * 10, y * 10, z * 10]
+    const quad = (a: number[], b: number[], cc: number[], d: number[]) => [...a, ...b, ...cc, ...a, ...cc, ...d]
+    const p = [
+      ...quad(c(0, 0, 0), c(1, 0, 0), c(1, 1, 0), c(0, 1, 0)),
+      ...quad(c(0, 0, 1), c(0, 1, 1), c(1, 1, 1), c(1, 0, 1)),
+      ...quad(c(0, 0, 0), c(0, 0, 1), c(1, 0, 1), c(1, 0, 0)),
+      ...quad(c(0, 1, 0), c(1, 1, 0), c(1, 1, 1), c(0, 1, 1)),
+      ...quad(c(0, 0, 0), c(0, 1, 0), c(0, 1, 1), c(0, 0, 1)),
+      ...quad(c(1, 0, 0), c(1, 0, 1), c(1, 1, 1), c(1, 1, 0))
+    ]
+    const lines = featureEdges(p)
+    expect(lines.length / 6).toBe(12)
+    // Chaque segment est une arête de 10 m (pas une diagonale de 14,1 m).
+    for (let i = 0; i < lines.length; i += 6) {
+      expect(Math.hypot(lines[i + 3] - lines[i], lines[i + 4] - lines[i + 1], lines[i + 5] - lines[i + 2])).toBeCloseTo(10, 5)
+    }
+  })
+})

@@ -76,9 +76,7 @@ interface SkyElements {
   treesOn: HTMLButtonElement
   treesOff: HTMLButtonElement
   hdOn: HTMLButtonElement
-  hdOff: HTMLButtonElement
   reliefOn: HTMLButtonElement
-  reliefOff: HTMLButtonElement
   reliefDist: HTMLInputElement
   reliefDistNum: HTMLInputElement
   busy: HTMLElement
@@ -366,10 +364,8 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.eye.value = String(Math.round(sliderFromEye(state.eyeHeight) * 1000))
     el.treesOn.setAttribute('aria-pressed', String(state.showTrees))
     el.treesOff.setAttribute('aria-pressed', String(!state.showTrees))
-    el.hdOn.setAttribute('aria-pressed', String(state.hdBuildings))
-    el.hdOff.setAttribute('aria-pressed', String(!state.hdBuildings))
-    el.reliefOn.setAttribute('aria-pressed', String(state.reliefOn))
-    el.reliefOff.setAttribute('aria-pressed', String(!state.reliefOn))
+    el.hdOn.setAttribute('aria-checked', String(state.hdBuildings))
+    el.reliefOn.setAttribute('aria-checked', String(state.reliefOn))
     el.reliefDist.value = String(Math.round(sliderFromRelief(state.reliefDistance) * 1000))
     el.reliefDist.disabled = !state.reliefOn
     el.reliefDistNum.disabled = !state.reliefOn
@@ -444,8 +440,8 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     syncInputs()
     void loadBuildings(true)
   }
-  el.hdOn.addEventListener('click', () => setHd(true))
-  el.hdOff.addEventListener('click', () => setHd(false))
+  // Interrupteur : un clic inverse l'état.
+  el.hdOn.addEventListener('click', () => setHd(!state.hdBuildings))
 
   // Relief lointain : affiché / masqué, distance de 200 m à 20 km.
   const setRelief = (on: boolean) => {
@@ -455,8 +451,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     syncInputs()
     void loadRelief()
   }
-  el.reliefOn.addEventListener('click', () => setRelief(true))
-  el.reliefOff.addEventListener('click', () => setRelief(false))
+  el.reliefOn.addEventListener('click', () => setRelief(!state.reliefOn))
   el.reliefDist.addEventListener('input', () => {
     state.reliefDistance = clampReliefDistance(reliefFromSlider(Number(el.reliefDist.value) / 1000))
     rememberSettings()

@@ -157,19 +157,13 @@
               <div class="ctrl">
                 <div class="ctrl-head">
                   <span class="ctrl-label">Bâtiments HD <small class="wip">WIP Strasbourg</small></span>
-                  <div class="seg seg-small" role="group" aria-label="Bâtiments HD">
-                    <button id="hd-off" type="button">Masqués</button>
-                    <button id="hd-on" type="button" title="Maquette 3D LoD2 de l’Eurométropole de Strasbourg (2022) à la place des bâtiments reconstruits (BD TOPO et LiDAR). Ailleurs, rien ne change.">Affichés</button>
-                  </div>
+                  <button id="hd-on" class="switch" type="button" role="switch" aria-checked="false" aria-label="Bâtiments HD" title="Maquette 3D LoD2 de l’Eurométropole de Strasbourg (2022) à la place des bâtiments reconstruits (BD TOPO et LiDAR). Ailleurs, rien ne change."><span class="switch-knob"></span></button>
                 </div>
               </div>
               <div class="ctrl">
                 <div class="ctrl-head">
                   <span class="ctrl-label">Relief lointain</span>
-                  <div class="seg seg-small" role="group" aria-label="Relief lointain">
-                    <button id="relief-off" type="button">Masqué</button>
-                    <button id="relief-on" type="button" title="Ligne des crêtes jusqu’à la distance choisie (MNT IGN), silhouette de la ville jusqu’à 3 km">Affiché</button>
-                  </div>
+                  <button id="relief-on" class="switch" type="button" role="switch" aria-checked="false" aria-label="Relief lointain" title="Ligne des crêtes jusqu’à la distance choisie (MNT IGN), silhouette de la ville jusqu’à 3 km"><span class="switch-knob"></span></button>
                 </div>
                 <div class="ctrl-slider">
                   <input id="relief-dist" type="range" min="0" max="1000" step="1" aria-label="Distance du relief" />
