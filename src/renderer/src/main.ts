@@ -54,6 +54,7 @@ const sky = setupSkyView(
     stars: byId('stars'),
     starsNum: byId('stars-num'),
     starsOut: byId('stars-out'),
+    focalEq: byId('focal-eq'),
     eye: byId('eye'),
     eyeNum: byId('eye-num'),
     treesOn: byId('trees-on'),

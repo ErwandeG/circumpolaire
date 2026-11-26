@@ -8,12 +8,15 @@ import {
   FOCAL_MIN_MM,
   SENSORS,
   SIDEREAL_DEG_PER_MIN,
+  cropFactor,
+  equivalentFocal,
   eyeFromSlider,
   fieldOfView,
   focalFromSlider,
   frameSize,
   reliefFromSlider,
   roundFocal,
+  sensorById,
   sliderFromEye,
   sliderFromFocal,
   sliderFromRelief,
@@ -67,6 +70,7 @@ interface SkyElements {
   stars: HTMLInputElement
   starsNum: HTMLInputElement
   starsOut: HTMLOutputElement
+  focalEq: HTMLOutputElement
   eye: HTMLInputElement
   eyeNum: HTMLInputElement
   treesOn: HTMLButtonElement
@@ -125,7 +129,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     start: new Date(),
     durationMin: prefs.durationMin,
     focalMm: prefs.focalMm,
-    sensorId: SENSORS[0].id,
+    sensorId: prefs.sensorId,
     orientation: prefs.orientation as FrameOrientation,
     azimuth: 0,
     altitude: 48.6,
@@ -156,6 +160,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       () =>
         savePreferences({
           focalMm: state.focalMm,
+          sensorId: state.sensorId,
           durationMin: state.durationMin,
           orientation: state.orientation,
           starCount: state.starCount,
@@ -177,11 +182,22 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     opt.textContent = s.label
     el.sensor.append(opt)
   }
-  // Un seul capteur pour l'instant : la liste est prête pour la suite.
-  el.sensor.disabled = SENSORS.length < 2
+  el.sensor.addEventListener('change', () => {
+    state.sensorId = sensorById(el.sensor.value).id
+    rememberSettings()
+    syncInputs()
+    layout()
+  })
 
-  const sensor = () => SENSORS.find((s) => s.id === state.sensorId) ?? SENSORS[0]
+  const sensor = () => sensorById(state.sensorId)
   const frame = () => frameSize(sensor(), state.orientation)
+  /** Focale réelle, et son équivalent plein format hors 24×36 : « 16 mm APS-C (≈ 25 mm éq. 24×36) ». */
+  const focalText = () => {
+    const s = sensor()
+    const f = Math.round(state.focalMm)
+    if (Math.abs(cropFactor(s) - 1) < 0.01) return `${f} mm plein format`
+    return `${f} mm ${s.short} (≈ ${Math.round(equivalentFocal(s, state.focalMm))} mm éq. 24×36)`
+  }
   const fov = () => ({
     h: fieldOfView(frame().width, state.focalMm),
     v: fieldOfView(frame().height, state.focalMm)
@@ -277,6 +293,11 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       `Arc des filés ${fmt1(arc)}° · ${moon}`
     const limit = allStars[state.starCount - 1][2]
     el.starsOut.textContent = `(magnitude ≤ ${fmt1(limit)})`
+    const crop = cropFactor(sensor())
+    el.focalEq.textContent =
+      Math.abs(crop - 1) < 0.01
+        ? ''
+        : `(≈ ${Math.round(equivalentFocal(sensor(), state.focalMm))} mm éq. 24×36, ×${crop.toLocaleString('fr-FR', { maximumFractionDigits: 2 })})`
     // Les champs de saisie suivent les curseurs, sauf pendant qu'on y tape.
     setNum(el.focalNum, Math.round(state.focalMm))
     setNum(el.durationNum, state.durationMin)
@@ -290,7 +311,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   function settingsSummary(): string {
     const nf = (x: number, digits = 1) => x.toLocaleString('fr-FR', { maximumFractionDigits: digits })
     const parts = [
-      `${Math.round(state.focalMm)} mm ${state.orientation === 'portrait' ? 'portrait' : 'paysage'}`,
+      `${focalText()} ${state.orientation === 'portrait' ? 'portrait' : 'paysage'}`,
       `${formatParisTime(state.start)}, pose ${state.durationMin} min`,
       `${nf(state.starCount, 0)} étoiles`,
       `œil à ${nf(state.eyeHeight)} m`,
@@ -513,7 +534,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       place: state.observer.label,
       when: `${pad(d.day)}/${pad(d.month)}/${d.year} à ${formatParisTime(state.start)} (heure de Paris)`,
       settings:
-        `${roundFocal(state.focalMm)} mm plein format, ${state.orientation === 'landscape' ? 'paysage' : 'portrait'} · ` +
+        `${focalText()}, ${state.orientation === 'landscape' ? 'paysage' : 'portrait'} · ` +
         `champ ${fmt1(f.h)}° × ${fmt1(f.v)}° · pose ${state.durationMin} min (arc ${fmt1(arc)}°) · ` +
         `visée az ${Math.round(((state.azimuth % 360) + 360) % 360)}°, haut. ${fmt1(state.altitude)}° · ${moon}`,
       coords: `${state.observer.lat.toFixed(5)}° N, ${state.observer.lon.toFixed(5)}° E`

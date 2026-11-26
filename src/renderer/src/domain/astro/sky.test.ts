@@ -1,7 +1,16 @@
 import { Body, DefineStar, Equator, Horizon, Observer } from 'astronomy-engine'
 import { describe, expect, it } from 'vitest'
 import starData from '../../data/stars.json'
-import { SIDEREAL_DEG_PER_MIN, fieldOfView, focalFromSlider, sliderFromFocal } from '../optics'
+import {
+  SENSORS,
+  SIDEREAL_DEG_PER_MIN,
+  cropFactor,
+  equivalentFocal,
+  fieldOfView,
+  focalFromSlider,
+  sensorById,
+  sliderFromFocal
+} from '../optics'
 import {
   StarField,
   altAzToEnu,
@@ -139,6 +148,29 @@ describe('optique', () => {
   it('donne 122° à 10 mm et 3,4° à 600 mm en largeur plein format', () => {
     expect(fieldOfView(36, 10)).toBeCloseTo(121.9, 1)
     expect(fieldOfView(36, 600)).toBeCloseTo(3.44, 2)
+  })
+
+  it('connaît les facteurs de recadrage usuels', () => {
+    const crop = (id: string) => cropFactor(sensorById(id))
+    expect(crop('full-frame')).toBeCloseTo(1, 5)
+    expect(crop('medium-44')).toBeCloseTo(0.79, 2)
+    expect(crop('medium-54')).toBeCloseTo(0.65, 2)
+    expect(crop('aps-c')).toBeCloseTo(1.53, 2)
+    expect(crop('aps-c-canon')).toBeCloseTo(1.61, 2)
+    expect(crop('m43')).toBeCloseTo(2.0, 1)
+    expect(new Set(SENSORS.map((s) => s.id)).size).toBe(SENSORS.length)
+  })
+
+  it('donne à 12 mm sur Micro 4/3 le champ d’un 24 mm plein format', () => {
+    const m43 = sensorById('m43')
+    expect(equivalentFocal(m43, 12)).toBeCloseTo(24, 0)
+    // Même diagonale de champ, à 1° près.
+    const diag = (w: number, h: number, f: number) => fieldOfView(Math.hypot(w, h), f)
+    expect(diag(17.3, 13, 12)).toBeCloseTo(diag(36, 24, 24), 0)
+  })
+
+  it('revient au plein format pour un capteur inconnu', () => {
+    expect(sensorById('inconnu').id).toBe('full-frame')
   })
 
   it('slider logarithmique réversible', () => {

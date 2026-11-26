@@ -17,6 +17,7 @@ describe('préférences de la vue', () => {
     const store = memoryStore()
     const prefs = {
       focalMm: 135,
+      sensorId: 'm43',
       durationMin: 90,
       orientation: 'portrait',
       starCount: 8000,
@@ -37,6 +38,11 @@ describe('préférences de la vue', () => {
     expect(p.focalMm).toBe(600)
     expect(p.durationMin).toBe(5)
     expect(p.starCount).toBe(15000)
+  })
+
+  it('ignore un capteur inconnu', () => {
+    expect(sanitizePreferences({ sensorId: 'aps-h' }).sensorId).toBe('full-frame')
+    expect(sanitizePreferences({ sensorId: 'aps-c' }).sensorId).toBe('aps-c')
   })
 
   it('borne la hauteur d’œil entre 20 cm et 100 m', () => {

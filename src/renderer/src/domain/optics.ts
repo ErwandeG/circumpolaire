@@ -1,14 +1,52 @@
-/** Capteurs disponibles. Seul le plein format est proposé pour l'instant. */
+/**
+ * Capteurs disponibles. La focale réglée est la focale réelle de l'objectif :
+ * le champ se calcule sur les dimensions du capteur choisi (un 4/3 donne une image 4:3).
+ */
 export interface Sensor {
   id: string
   label: string
+  /** Nom court pour les résumés. */
+  short: string
   widthMm: number
   heightMm: number
 }
 
 export const SENSORS: readonly Sensor[] = [
-  { id: 'full-frame', label: 'Plein format 36×24', widthMm: 36, heightMm: 24 }
+  { id: 'medium-54', label: 'Moyen format 53,4×40 (Phase One IQ4)', short: 'moyen format 54×40', widthMm: 53.4, heightMm: 40 },
+  {
+    id: 'medium-44',
+    label: 'Moyen format 43,8×32,9 (Fujifilm GFX, Hasselblad X)',
+    short: 'moyen format 44×33',
+    widthMm: 43.8,
+    heightMm: 32.9
+  },
+  { id: 'full-frame', label: 'Plein format 36×24', short: 'plein format', widthMm: 36, heightMm: 24 },
+  {
+    id: 'aps-c',
+    label: 'APS-C 23,5×15,6 (Sony, Nikon, Fujifilm, Pentax)',
+    short: 'APS-C',
+    widthMm: 23.5,
+    heightMm: 15.6
+  },
+  { id: 'aps-c-canon', label: 'APS-C Canon 22,3×14,9', short: 'APS-C Canon', widthMm: 22.3, heightMm: 14.9 },
+  { id: 'm43', label: 'Micro 4/3 17,3×13 (Olympus/OM, Panasonic)', short: 'Micro 4/3', widthMm: 17.3, heightMm: 13 }
 ]
+
+export const DEFAULT_SENSOR_ID = 'full-frame'
+
+export function sensorById(id: string): Sensor {
+  return SENSORS.find((s) => s.id === id) ?? SENSORS.find((s) => s.id === DEFAULT_SENSOR_ID)!
+}
+
+/** Facteur de recadrage : rapport des diagonales du plein format (43,3 mm) et du capteur. */
+export function cropFactor(sensor: Sensor): number {
+  return Math.hypot(36, 24) / Math.hypot(sensor.widthMm, sensor.heightMm)
+}
+
+/** Focale donnant le même angle de champ (en diagonale) sur un plein format. */
+export function equivalentFocal(sensor: Sensor, focalMm: number): number {
+  return focalMm * cropFactor(sensor)
+}
 
 export type FrameOrientation = 'landscape' | 'portrait'
 

@@ -1,4 +1,12 @@
-import { DURATION_MAX, DURATION_MIN, FOCAL_MAX_MM, FOCAL_MIN_MM, type FrameOrientation } from './optics'
+import {
+  DEFAULT_SENSOR_ID,
+  DURATION_MAX,
+  DURATION_MIN,
+  FOCAL_MAX_MM,
+  FOCAL_MIN_MM,
+  SENSORS,
+  type FrameOrientation
+} from './optics'
 import {
   EYE_HEIGHT_M,
   EYE_HEIGHT_MAX_M,
@@ -13,6 +21,8 @@ const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x
 /** Réglages de la vue du ciel retrouvés au lancement suivant. */
 export interface ViewPreferences {
   focalMm: number
+  /** Capteur choisi (identifiant de SENSORS). */
+  sensorId: string
   durationMin: number
   orientation: FrameOrientation
   starCount: number
@@ -43,6 +53,7 @@ export const STAR_COUNT_STEP = 1000
 
 export const DEFAULT_PREFERENCES: ViewPreferences = {
   focalMm: 24,
+  sensorId: DEFAULT_SENSOR_ID,
   durationMin: 30,
   orientation: 'landscape',
   starCount: 2000,
@@ -76,6 +87,7 @@ export function sanitizePreferences(raw: unknown): ViewPreferences {
   const relief = num(p.reliefDistanceM)
   return {
     focalMm: focal === undefined ? d.focalMm : clamp(focal, FOCAL_MIN_MM, FOCAL_MAX_MM),
+    sensorId: SENSORS.some((s) => s.id === p.sensorId) ? (p.sensorId as string) : d.sensorId,
     durationMin: duration === undefined ? d.durationMin : Math.round(clamp(duration, DURATION_MIN, DURATION_MAX)),
     orientation: p.orientation === 'portrait' || p.orientation === 'landscape' ? p.orientation : d.orientation,
     starCount:
