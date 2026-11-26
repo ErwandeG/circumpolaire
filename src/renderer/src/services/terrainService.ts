@@ -1,9 +1,9 @@
 import { moveOutside, parseBuildings, type Building } from '../domain/geo/buildings'
 import { fromLambert93, toLambert93 } from '../domain/geo/lambert93'
 import {
-  GRID_RES_M,
   SCENE_RADIUS_M,
   buildTerrain,
+  gridResFor,
   cleanNoData,
   sceneExtent,
   type ElevationGrid,
@@ -26,10 +26,11 @@ async function fetchGrid(
   minX: number,
   minY: number,
   maxX: number,
-  maxY: number
+  maxY: number,
+  res: number
 ): Promise<ElevationGrid> {
-  const cols = Math.round((maxX - minX) / GRID_RES_M)
-  const rows = Math.round((maxY - minY) / GRID_RES_M)
+  const cols = Math.round((maxX - minX) / res)
+  const rows = Math.round((maxY - minY) / res)
   const url =
     `${WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${LAYERS[layer]}&STYLES=` +
     `&CRS=EPSG:2154&BBOX=${minX},${minY},${maxX},${maxY}&WIDTH=${cols}&HEIGHT=${rows}` +
@@ -39,17 +40,27 @@ async function fetchGrid(
   const view = new DataView(buf)
   const values = new Float32Array(cols * rows)
   for (let i = 0; i < values.length; i++) values[i] = view.getFloat32(i * 4, true)
-  return { minX, maxY, res: GRID_RES_M, cols, rows, values: cleanNoData(values) }
+  return { minX, maxY, res, cols, rows, values: cleanNoData(values) }
 }
+
+/** Taille des pages du WFS : à 500 m, un centre-ville compte plusieurs milliers de bâtiments. */
+const WFS_PAGE = 1000
+const WFS_MAX_PAGES = 20
 
 async function fetchBuildings(x: number, y: number, radius: number): Promise<Building[]> {
   const r = radius + 5
-  const url =
+  const base =
     `${WFS}?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=BDTOPO_V3:batiment` +
     `&SRSNAME=EPSG:2154&BBOX=${x - r},${y - r},${x + r},${y + r},urn:ogc:def:crs:EPSG::2154` +
-    `&OUTPUTFORMAT=application/json&COUNT=1000`
-  const buf = await fetchCached(url)
-  return parseBuildings(JSON.parse(new TextDecoder().decode(buf)))
+    `&OUTPUTFORMAT=application/json&COUNT=${WFS_PAGE}`
+  const all: Building[] = []
+  for (let page = 0; page < WFS_MAX_PAGES; page++) {
+    const buf = await fetchCached(`${base}&STARTINDEX=${page * WFS_PAGE}`)
+    const json = JSON.parse(new TextDecoder().decode(buf)) as { features?: unknown[] }
+    all.push(...parseBuildings(json))
+    if (!Array.isArray(json.features) || json.features.length < WFS_PAGE) break
+  }
+  return all
 }
 
 export type TerrainResult =
@@ -73,9 +84,10 @@ export async function loadTerrain(lat: number, lon: number, radius: number = SCE
     const moved = moveOutside(buildings, p0.x, p0.y)
     const geo = moved.moved > 0 ? fromLambert93(moved.x, moved.y) : { lat, lon }
     const ext = sceneExtent(moved.x, moved.y, buildings, radius)
+    const res = gridResFor(radius)
     const [mns, mnt] = await Promise.all([
-      fetchGrid('mns', ext.minX, ext.minY, ext.maxX, ext.maxY),
-      fetchGrid('mnt', ext.minX, ext.minY, ext.maxX, ext.maxY)
+      fetchGrid('mns', ext.minX, ext.minY, ext.maxX, ext.maxY, res),
+      fetchGrid('mnt', ext.minX, ext.minY, ext.maxX, ext.maxY, res)
     ])
     const mesh = buildTerrain({ x: moved.x, y: moved.y, lat: geo.lat, lon: geo.lon }, mns, mnt, buildings, radius)
     return {

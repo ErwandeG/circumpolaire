@@ -23,7 +23,9 @@ export const BuildingPartKind = { Building: 1, Fallback: 3 } as const
  * Emprise BD TOPO et LiDAR peuvent être décalés de 1 à 1,5 m : ces pixels voient la rue ou les arbres.
  * On essaie 1,5 m, puis 0,5 m pour les petits bâtiments.
  */
-const EDGE_ERODE_TRIES = [3, 1] as const
+const EDGE_ERODE_TRIES_M = [1.5, 0.5] as const
+/** Même bande exprimée en pixels selon le pas de la grille (0,5 m ou 1 m). */
+const erodeTries = (res: number) => EDGE_ERODE_TRIES_M.map((m) => Math.max(1, Math.round(m / res)))
 /** Un pixel d'emprise à moins de cette hauteur au-dessus du sol voit la rue, pas un toit. */
 const MIN_ROOF_ABOVE_GROUND_M = 2.5
 /** Passes de propagation des hauteurs de toit vers l'extérieur (pour l'interpolation au contour). */
@@ -153,7 +155,8 @@ export function buildBuildingGeometry(
         r0 = Math.min(r0, Math.floor((mns.maxY - y) / res - 0.5))
         r1 = Math.max(r1, Math.ceil((mns.maxY - y) / res - 0.5))
       }
-    const m = FILL_PASSES + EDGE_ERODE_TRIES[0] + 1
+    const tries = erodeTries(res)
+    const m = FILL_PASSES + tries[0] + 1
     c0 = Math.max(0, c0 - m)
     r0 = Math.max(0, r0 - m)
     c1 = Math.min(cols - 1, c1 + m)
@@ -224,7 +227,7 @@ export function buildBuildingGeometry(
         return any
       }
       let erode = 0
-      for (const radius of EDGE_ERODE_TRIES) {
+      for (const radius of tries) {
         if (markDeep(radius)) {
           erode = radius
           break

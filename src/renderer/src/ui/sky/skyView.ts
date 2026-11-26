@@ -59,6 +59,7 @@ interface SkyElements {
   starsOut: HTMLOutputElement
   radius50: HTMLButtonElement
   radius150: HTMLButtonElement
+  radius500: HTMLButtonElement
   sensor: HTMLSelectElement
   landscape: HTMLButtonElement
   portrait: HTMLButtonElement
@@ -274,6 +275,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.sensor.value = state.sensorId
     el.radius50.setAttribute('aria-pressed', String(state.radius === 50))
     el.radius150.setAttribute('aria-pressed', String(state.radius === 150))
+    el.radius500.setAttribute('aria-pressed', String(state.radius === 500))
     el.landscape.setAttribute('aria-pressed', String(state.orientation === 'landscape'))
     el.portrait.setAttribute('aria-pressed', String(state.orientation === 'portrait'))
     const d = parisDayOf(state.start)
@@ -316,6 +318,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   }
   el.radius50.addEventListener('click', () => setRadius(50))
   el.radius150.addEventListener('click', () => setRadius(150))
+  el.radius500.addEventListener('click', () => setRadius(500))
   el.landscape.addEventListener('click', () => {
     state.orientation = 'landscape'
     rememberSettings()

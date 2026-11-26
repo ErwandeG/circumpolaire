@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Building } from './geo/buildings'
 import { toLambert93 } from './geo/lambert93'
-import { SurfaceKind, buildTerrain, sceneExtent, type ElevationGrid } from './terrain'
+import { SurfaceKind, buildTerrain, gridResFor, sceneExtent, type ElevationGrid } from './terrain'
 
 const LAT = 48.5834
 const LON = 7.7458
@@ -110,6 +110,15 @@ describe('zone chargée', () => {
     expect(e.maxX - obs.x).toBeGreaterThan(110)
     expect(e.maxX - obs.x).toBeLessThanOrEqual(120.5)
     expect(obs.x - e.minX).toBeCloseTo(60, 0)
+  })
+
+  it('à 500 m, passe au pas de 1 m et aligne la zone sur ce pas', () => {
+    expect(gridResFor(50)).toBe(0.5)
+    expect(gridResFor(150)).toBe(0.5)
+    expect(gridResFor(500)).toBe(1)
+    const e = sceneExtent(obs.x + 0.3, obs.y + 0.7, [], 500)
+    for (const v of [e.minX, e.minY, e.maxX, e.maxY]) expect(Number.isInteger(v)).toBe(true)
+    expect(e.maxX - e.minX).toBeLessThanOrEqual(1002)
   })
 
   it('à 150 m, couvre le cercle entier et ignore un bâtiment hors de portée', () => {

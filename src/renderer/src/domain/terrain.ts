@@ -4,11 +4,19 @@ import { fromLambert93, toLambert93 } from './geo/lambert93'
 import { localFrame, toLocal, type LocalFrame } from './geo/local'
 
 /** Rayons proposés pour les volumes 3D autour de l'observateur. */
-export const SCENE_RADII_M = [50, 150] as const
+export const SCENE_RADII_M = [50, 150, 500] as const
 export type SceneRadius = (typeof SCENE_RADII_M)[number]
 export const SCENE_RADIUS_M: SceneRadius = 50
 /** Pas des modèles LiDAR HD. */
 export const GRID_RES_M = 0.5
+
+/**
+ * Pas de grille selon le rayon : 0,5 m (pas natif du LiDAR HD) jusqu'à 150 m,
+ * 1 m à 500 m pour garder un maillage affichable (~1,2 million de pixels au lieu de 5).
+ */
+export function gridResFor(radius: number): number {
+  return radius > 200 ? 1 : GRID_RES_M
+}
 export const EYE_HEIGHT_M = 1.7
 
 /** Côté maximal de la zone chargée : le cercle plus 60 m de marge pour les bâtiments qu'il touche. */
@@ -59,7 +67,8 @@ export function sceneExtent(
   minY = Math.max(minY, cy - half)
   maxX = Math.min(maxX, cx + half)
   maxY = Math.min(maxY, cy + half)
-  const snap = (v: number, f: (n: number) => number) => f(v / GRID_RES_M) * GRID_RES_M
+  const res = gridResFor(radius)
+  const snap = (v: number, f: (n: number) => number) => f(v / res) * res
   return {
     minX: snap(minX, Math.floor),
     minY: snap(minY, Math.floor),
@@ -155,7 +164,7 @@ export function buildTerrain(
 
   // Abords des bâtiments (1 m) : débords de toit et décalages entre LiDAR et emprise.
   // Le sol y reste au niveau du MNT, sinon ces pixels deviendraient de faux arbres collés aux façades.
-  const NEAR_CELLS = 2
+  const NEAR_CELLS = Math.max(1, Math.round(1 / mns.res))
   const nearBuilding = new Uint8Array(cols * rows)
   for (let r = 0; r < rows; r++)
     for (let c = 0; c < cols; c++) {

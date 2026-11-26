@@ -55,6 +55,7 @@ const sky = setupSkyView(
     starsOut: byId('stars-out'),
     radius50: byId('radius-50'),
     radius150: byId('radius-150'),
+    radius500: byId('radius-500'),
     sensor: byId('sensor'),
     landscape: byId('orient-landscape'),
     portrait: byId('orient-portrait'),
