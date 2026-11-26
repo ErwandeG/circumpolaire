@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://data.geopf.fr; connect-src 'self' https://data.geopf.fr"
+    />
+    <title>Circumpolaire</title>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="panel">
+        <h1 class="app-title">Circumpolaire</h1>
+
+        <form class="search" id="search-form" autocomplete="off">
+          <label class="search-label" for="search-input">Adresse ou ville</label>
+          <div class="search-row">
+            <input
+              id="search-input"
+              class="search-input"
+              type="search"
+              placeholder="Ex. 1 place Kléber, Strasbourg"
+              spellcheck="false"
+            />
+            <button id="search-button" class="search-button" type="submit">Chercher</button>
+          </div>
+        </form>
+
+        <p id="search-message" class="message" role="status" hidden></p>
+        <ul id="search-results" class="results" hidden></ul>
+
+        <section class="current" aria-labelledby="current-title">
+          <h2 id="current-title" class="section-title">Lieu de calcul</h2>
+          <p id="current-label" class="current-label"></p>
+          <p id="current-meta" class="current-meta"></p>
+        </section>
+      </aside>
+
+      <main id="map" class="map" aria-label="Carte"></main>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
