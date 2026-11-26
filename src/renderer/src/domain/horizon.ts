@@ -54,8 +54,8 @@ export interface HorizonProfile {
   layerStart: Uint32Array
 }
 
-/** Bas des bandes : sous l'horizon, ce que l'on voit est le sol proche. */
-const LAYER_FLOOR_DEG = -30
+/** Bas des bandes : presque à la verticale, pour les vues plongeantes depuis un sommet ou une falaise. */
+const LAYER_FLOOR_DEG = -89
 /** Deux points du terrain vu sont dans la même bande si leurs distances diffèrent de moins de 30 %. */
 const LAYER_BIN = Math.log(1.3)
 

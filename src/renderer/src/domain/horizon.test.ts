@@ -77,8 +77,8 @@ describe('relief lointain', () => {
     const from = p.layerStart[0]
     const to = p.layerStart[1]
     expect(to - from).toBeGreaterThan(1)
-    // Bandes jointives de −30° jusqu'à la crête, distances croissantes.
-    expect(p.layers[from * 3]).toBe(-30)
+    // Bandes jointives de −89° jusqu'à la crête, distances croissantes.
+    expect(p.layers[from * 3]).toBe(-89)
     for (let k = from + 1; k < to; k++) {
       expect(p.layers[k * 3]).toBeCloseTo(p.layers[(k - 1) * 3 + 1], 5)
       expect(p.layers[k * 3 + 2]).toBeGreaterThan(p.layers[(k - 1) * 3 + 2])

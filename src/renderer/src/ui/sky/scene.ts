@@ -296,11 +296,15 @@ export class SkyScene {
     dome.frustumCulled = false
     this.sky.add(dome)
 
-    // Sol : disque sombre à 1,70 m sous l'œil, de la couleur des silhouettes.
+    // Sol : disque sombre sous l'œil, de la couleur des silhouettes. C'est un simple fond, dessiné
+    // juste après le ciel et sans écrire la profondeur : un plan horizontal à hauteur des pieds
+    // cacherait tout terrain plus bas (pente descendante, vallée vue d'un sommet). Volumes 3D et
+    // relief passent donc toujours devant ; le disque ne se voit que là où il n'y a aucune donnée.
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(20_000, 96),
-      new THREE.MeshBasicMaterial({ color: hexOf(SILHOUETTE) })
+      new THREE.MeshBasicMaterial({ color: hexOf(SILHOUETTE), depthWrite: false, fog: false })
     )
+    ground.renderOrder = -9
     ground.rotation.x = -Math.PI / 2
     ground.position.y = -EYE_HEIGHT_M
     this.groundDisc = ground
