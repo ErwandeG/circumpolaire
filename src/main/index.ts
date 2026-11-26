@@ -1,13 +1,17 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 
+// Ancien nom de l'appli (« Circumpolaire ») : on garde son dossier de données pour conserver
+// les réglages, le dernier lieu et le cache des zones déjà chargées.
+app.setPath('userData', join(app.getPath('appData'), 'circumpolaire'))
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 800,
     minHeight: 560,
-    title: 'Circumpolaire',
+    title: 'Star Trail Planner',
     autoHideMenuBar: true,
     // Une fois empaquetée, l'appli prend l'icône de l'exécutable ; en développement, celle du dépôt.
     ...(app.isPackaged ? {} : { icon: join(__dirname, '../../build/icon.png') }),

@@ -545,7 +545,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   function captureFileName(): string {
     const d = parisDayOf(state.start)
     const t = formatParisTime(state.start).replace(':', '')
-    return `circumpolaire-${d.year}${pad(d.month)}${pad(d.day)}-${t}-${roundFocal(state.focalMm)}mm.png`
+    return `star-trail-planner-${d.year}${pad(d.month)}${pad(d.day)}-${t}-${roundFocal(state.focalMm)}mm.png`
   }
 
   /** Rendu en haute définition (2 400 px sur le grand côté), puis retour à la taille d'écran. */

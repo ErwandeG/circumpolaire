@@ -1,5 +1,5 @@
 {
-  "name": "circumpolaire",
+  "name": "star-trail-planner",
   "version": "0.4.1",
   "description": "Préparation de photos circumpolaires en ville : calendrier lunaire et vue du ciel à hauteur d'homme.",
   "private": true,
@@ -19,7 +19,7 @@
   "homepage": "https://github.com/ErwandeG/circumpolaire",
   "build": {
     "appId": "io.github.erwandeg.circumpolaire",
-    "productName": "Circumpolaire",
+    "productName": "Star Trail Planner",
     "directories": {
       "output": "dist"
     },
@@ -38,8 +38,8 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "Circumpolaire",
-      "artifactName": "Circumpolaire-${version}-installation.${ext}"
+      "shortcutName": "Star Trail Planner",
+      "artifactName": "StarTrailPlanner-${version}-installation.${ext}"
     },
     "linux": {
       "target": [
@@ -49,10 +49,10 @@
       "category": "Science",
       "maintainer": "ErwandeG <91877730+ErwandeG@users.noreply.github.com>",
       "synopsis": "Préparation de photos circumpolaires en ville",
-      "artifactName": "Circumpolaire-${version}-linux-${arch}.${ext}"
+      "artifactName": "StarTrailPlanner-${version}-linux-${arch}.${ext}"
     },
     "portable": {
-      "artifactName": "Circumpolaire-${version}-portable.${ext}"
+      "artifactName": "StarTrailPlanner-${version}-portable.${ext}"
     }
   },
   "dependencies": {
