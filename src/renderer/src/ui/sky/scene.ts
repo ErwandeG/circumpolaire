@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { Enu, MoonState, StarRow } from '../../domain/astro/sky'
 import { SurfaceKind, type TerrainMesh } from '../../domain/terrain'
+import type { HorizonResult } from './horizonClient'
 
 /** Couleurs de la surface : sol, bâtiment, végétation, volume BD TOPO de repli. */
 export const SURFACE_COLORS: Record<number, [number, number, number]> = {
@@ -12,6 +13,28 @@ export const SURFACE_COLORS: Record<number, [number, number, number]> = {
 
 /** Halo lumineux de la ville au ras de l'horizon : couleur de la brume. */
 const FOG_COLOR = 0x171d2c
+
+/** Relief lointain : distance de dessin (devant les étoiles, à 5 000). */
+const RELIEF_RADIUS = 4000
+const reliefVertex = /* glsl */ `
+  attribute vec4 rgba;
+  varying vec4 vRgba;
+  void main() {
+    vRgba = rgba;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+const reliefFragment = /* glsl */ `
+  varying vec4 vRgba;
+  void main() { gl_FragColor = vRgba; }
+`
+
+/** Direction (azimut, hauteur en degrés) → point du repère three à la distance r. */
+function dirTo(azDeg: number, altDeg: number, r: number): [number, number, number] {
+  const az = (azDeg * Math.PI) / 180
+  const alt = (altDeg * Math.PI) / 180
+  return [Math.cos(alt) * Math.sin(az) * r, Math.sin(alt) * r, -Math.cos(alt) * Math.cos(az) * r]
+}
 
 /**
  * Rendu three.js de la vue à hauteur d'homme.
@@ -487,6 +510,120 @@ export class SkyScene {
 
     // Brume : plus le rayon est grand, plus elle est légère (≈ 35 % à la limite du cercle).
     this.scene.fog = new THREE.FogExp2(FOG_COLOR, 0.45 / (radius + 80))
+  }
+
+  private readonly relief = new THREE.Group()
+
+  /**
+   * Relief lointain : masse sombre sous la crête principale (elle cache les étoiles derrière),
+   * liseré lumineux le long de la crête, crêtes intermédiaires plus discrètes et estompées au loin.
+   */
+  setHorizon(h: HorizonResult | null): void {
+    for (const child of [...this.relief.children]) {
+      this.relief.remove(child)
+      const obj = child as THREE.Mesh
+      obj.geometry.dispose()
+      ;(obj.material as THREE.Material).dispose()
+    }
+    if (!this.relief.parent) this.sky.add(this.relief)
+    if (!h) return
+    const { profile, segments, maxDistance } = h
+    const n = profile.azimuths
+    const azOf = (i: number) => (i / n) * 360
+    const alt = (i: number) => {
+      const a = profile.skyline[i % n]
+      return Number.isNaN(a) ? -30 : a
+    }
+
+    // Masse : bande entre la crête et −30°, fermée sur 360°.
+    const fill = new Float32Array((n + 1) * 2 * 3)
+    for (let i = 0; i <= n; i++) {
+      fill.set(dirTo(azOf(i), alt(i), RELIEF_RADIUS), i * 6)
+      fill.set(dirTo(azOf(i), -30, RELIEF_RADIUS), i * 6 + 3)
+    }
+    const fillIdx: number[] = []
+    for (let i = 0; i < n; i++) {
+      const a = i * 2
+      fillIdx.push(a, a + 1, a + 2, a + 2, a + 1, a + 3)
+    }
+    const fillGeom = new THREE.BufferGeometry()
+    fillGeom.setAttribute('position', new THREE.BufferAttribute(fill, 3))
+    fillGeom.setIndex(fillIdx)
+    const mass = new THREE.Mesh(fillGeom, new THREE.MeshBasicMaterial({ color: 0x0c111c, side: THREE.DoubleSide, fog: false }))
+    mass.frustumCulled = false
+    mass.renderOrder = -2
+    this.relief.add(mass)
+
+    // Halo sous la crête : dégradé additif de 0,4° de haut, plus vif pour les crêtes proches.
+    const glowPos = new Float32Array((n + 1) * 2 * 3)
+    const glowCol = new Float32Array((n + 1) * 2 * 4)
+    const near = (d: number) => (Number.isNaN(d) ? 0 : 1 - 0.6 * Math.min(1, d / Math.max(1, maxDistance)))
+    for (let i = 0; i <= n; i++) {
+      const strength = near(profile.skylineDistance[i % n])
+      glowPos.set(dirTo(azOf(i), alt(i), RELIEF_RADIUS * 0.997), i * 6)
+      glowPos.set(dirTo(azOf(i), alt(i) - 0.4, RELIEF_RADIUS * 0.997), i * 6 + 3)
+      glowCol.set([0.55, 0.78, 1.0, 0.45 * strength], i * 8)
+      glowCol.set([0.55, 0.78, 1.0, 0], i * 8 + 4)
+    }
+    const glowGeom = new THREE.BufferGeometry()
+    glowGeom.setAttribute('position', new THREE.BufferAttribute(glowPos, 3))
+    glowGeom.setAttribute('rgba', new THREE.BufferAttribute(glowCol, 4))
+    glowGeom.setIndex(fillIdx)
+    const glow = new THREE.Mesh(
+      glowGeom,
+      new THREE.ShaderMaterial({
+        vertexShader: reliefVertex,
+        fragmentShader: reliefFragment,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide
+      })
+    )
+    glow.frustumCulled = false
+    this.relief.add(glow)
+
+    // Liseré : la crête principale.
+    const linePos = new Float32Array((n + 1) * 3)
+    const lineCol = new Float32Array((n + 1) * 4)
+    for (let i = 0; i <= n; i++) {
+      linePos.set(dirTo(azOf(i), alt(i), RELIEF_RADIUS * 0.995), i * 3)
+      const s = Number.isNaN(profile.skyline[i % n]) ? 0 : 0.55 + 0.45 * near(profile.skylineDistance[i % n])
+      lineCol.set([0.75, 0.9, 1.0, s], i * 4)
+    }
+    const lineGeom = new THREE.BufferGeometry()
+    lineGeom.setAttribute('position', new THREE.BufferAttribute(linePos, 3))
+    lineGeom.setAttribute('rgba', new THREE.BufferAttribute(lineCol, 4))
+    const line = new THREE.Line(
+      lineGeom,
+      new THREE.ShaderMaterial({ vertexShader: reliefVertex, fragmentShader: reliefFragment, transparent: true, depthWrite: false })
+    )
+    line.frustumCulled = false
+    this.relief.add(line)
+
+    // Crêtes intermédiaires : traits plus fins, estompés avec la distance.
+    if (segments.length > 0) {
+      const count = segments.length / 5
+      const segPos = new Float32Array(count * 2 * 3)
+      const segCol = new Float32Array(count * 2 * 4)
+      for (let k = 0; k < count; k++) {
+        const [a1, h1, a2, h2, d] = segments.slice(k * 5, k * 5 + 5)
+        segPos.set(dirTo(azOf(a1), h1, RELIEF_RADIUS * 0.994), k * 6)
+        segPos.set(dirTo(azOf(a2), h2, RELIEF_RADIUS * 0.994), k * 6 + 3)
+        const a = 0.12 + 0.5 * (1 - Math.min(1, d / Math.max(1, maxDistance)))
+        segCol.set([0.55, 0.72, 0.95, a], k * 8)
+        segCol.set([0.55, 0.72, 0.95, a], k * 8 + 4)
+      }
+      const segGeom = new THREE.BufferGeometry()
+      segGeom.setAttribute('position', new THREE.BufferAttribute(segPos, 3))
+      segGeom.setAttribute('rgba', new THREE.BufferAttribute(segCol, 4))
+      const ridges = new THREE.LineSegments(
+        segGeom,
+        new THREE.ShaderMaterial({ vertexShader: reliefVertex, fragmentShader: reliefFragment, transparent: true, depthWrite: false })
+      )
+      ridges.frustumCulled = false
+      this.relief.add(ridges)
+    }
   }
 
   /** Oriente la caméra : azimut et hauteur du centre du cadre, champ vertical, rapport largeur/hauteur. */

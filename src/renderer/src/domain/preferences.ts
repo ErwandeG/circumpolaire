@@ -8,6 +8,8 @@ import {
   type SceneRadius
 } from './terrain'
 
+const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x))
+
 /** Réglages de la vue du ciel retrouvés au lancement suivant. */
 export interface ViewPreferences {
   focalMm: number
@@ -19,6 +21,18 @@ export interface ViewPreferences {
   /** Hauteur de l'œil au-dessus du sol, en mètres. */
   eyeHeight: number
   showTrees: boolean
+  /** Relief lointain (crêtes de montagne) affiché. */
+  reliefOn: boolean
+  /** Distance jusqu'à laquelle on cherche le relief, en mètres. */
+  reliefDistanceM: number
+}
+
+export const RELIEF_DISTANCE_MIN_M = 200
+export const RELIEF_DISTANCE_MAX_M = 20000
+
+/** Distance du relief bornée et arrondie à 10 m. */
+export function clampReliefDistance(m: number): number {
+  return Math.round(clamp(m, RELIEF_DISTANCE_MIN_M, RELIEF_DISTANCE_MAX_M) / 10) * 10
 }
 
 export const STAR_COUNT_MIN = 1000
@@ -33,10 +47,10 @@ export const DEFAULT_PREFERENCES: ViewPreferences = {
   radius: SCENE_RADIUS_M,
   miniMapCollapsed: false,
   eyeHeight: EYE_HEIGHT_M,
-  showTrees: true
+  showTrees: true,
+  reliefOn: false,
+  reliefDistanceM: 5000
 }
-
-const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x))
 
 /** Hauteur d'œil bornée et arrondie au centimètre. */
 export function clampEyeHeight(h: number): number {
@@ -56,6 +70,7 @@ export function sanitizePreferences(raw: unknown): ViewPreferences {
   const duration = num(p.durationMin)
   const stars = num(p.starCount)
   const eye = num(p.eyeHeight)
+  const relief = num(p.reliefDistanceM)
   return {
     focalMm: focal === undefined ? d.focalMm : clamp(focal, FOCAL_MIN_MM, FOCAL_MAX_MM),
     durationMin: duration === undefined ? d.durationMin : Math.round(clamp(duration, DURATION_MIN, DURATION_MAX)),
@@ -67,6 +82,8 @@ export function sanitizePreferences(raw: unknown): ViewPreferences {
     radius: (SCENE_RADII_M as readonly number[]).includes(p.radius as number) ? (p.radius as SceneRadius) : d.radius,
     miniMapCollapsed: typeof p.miniMapCollapsed === 'boolean' ? p.miniMapCollapsed : d.miniMapCollapsed,
     eyeHeight: eye === undefined ? d.eyeHeight : clampEyeHeight(eye),
-    showTrees: typeof p.showTrees === 'boolean' ? p.showTrees : d.showTrees
+    showTrees: typeof p.showTrees === 'boolean' ? p.showTrees : d.showTrees,
+    reliefOn: typeof p.reliefOn === 'boolean' ? p.reliefOn : d.reliefOn,
+    reliefDistanceM: relief === undefined ? d.reliefDistanceM : clampReliefDistance(relief)
   }
 }

@@ -86,6 +86,11 @@
               <div id="sky-hud" class="sky-hud"></div>
             </div>
 
+            <div id="sky-busy" class="sky-busy" role="status" aria-live="polite" hidden>
+              <span class="spinner" aria-hidden="true"></span>
+              <span id="sky-busy-text"></span>
+            </div>
+
             <div id="minimap-box" class="minimap">
               <button id="minimap-toggle" class="minimap-head" type="button" aria-expanded="true">Carte ▾</button>
               <div id="minimap" class="minimap-map" aria-label="Carte du point de vue : cliquez pour vous y placer"></div>
@@ -135,6 +140,21 @@
               </div>
             </div>
             <div class="ctrl">
+              <span class="ctrl-label">Relief lointain (crêtes)</span>
+              <div class="seg" role="group" aria-label="Relief lointain">
+                <button id="relief-off" type="button">Masqué</button>
+                <button id="relief-on" type="button" title="Ligne des crêtes jusqu’à la distance choisie (MNT IGN)">Affiché</button>
+              </div>
+            </div>
+            <div class="ctrl ctrl-wide">
+              <label for="relief-dist">Distance du relief</label>
+              <div class="ctrl-slider">
+                <input id="relief-dist" type="range" min="0" max="1000" step="1" />
+                <input id="relief-dist-num" class="num" type="number" min="0.2" max="20" step="0.1" aria-label="Distance du relief en kilomètres" />
+                <span class="unit">km</span>
+              </div>
+            </div>
+            <div class="ctrl">
               <label for="sensor">Capteur</label>
               <select id="sensor"></select>
             </div>
@@ -165,7 +185,7 @@
             <span class="sky-legend"><i class="lg lg-building"></i>bâtiments</span>
             <span class="sky-legend"><i class="lg lg-vegetation"></i>arbres</span>
             <span class="sky-legend"><i class="lg lg-fallback"></i>volumes BD TOPO (pas de LiDAR)</span>
-            · Relief et bâtiments : IGN LiDAR HD et BD TOPO.
+            · Relief et bâtiments : IGN LiDAR HD et BD TOPO ; relief lointain : IGN RGE ALTI.
             Étoiles : base HYG v4.1 (Hipparcos, Yale Bright Star, Gliese), licence CC BY-SA 4.0. Calculs : astronomy-engine.
           </p>
           <p class="sky-keys">

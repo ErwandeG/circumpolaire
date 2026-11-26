@@ -53,6 +53,17 @@ export function sliderFromEye(heightM: number): number {
   return Math.log(h / EYE_MIN) / Math.log(EYE_MAX / EYE_MIN)
 }
 
+/** Distance du relief sur un curseur logarithmique : 200 m → 20 km. */
+export function reliefFromSlider(position: number): number {
+  const p = Math.max(0, Math.min(1, position))
+  return 200 * Math.pow(100, p)
+}
+
+export function sliderFromRelief(distanceM: number): number {
+  const d = Math.max(200, Math.min(20000, distanceM))
+  return Math.log(d / 200) / Math.log(100)
+}
+
 /** Arrondi lisible : 10, 14, 24, 35, 50, 85, 135, 200, 300… sur le slider. */
 export function roundFocal(focalMm: number): number {
   if (focalMm < 30) return Math.round(focalMm)

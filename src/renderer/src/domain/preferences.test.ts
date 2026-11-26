@@ -23,7 +23,9 @@ describe('préférences de la vue', () => {
       radius: 500,
       miniMapCollapsed: true,
       eyeHeight: 12.5,
-      showTrees: false
+      showTrees: false,
+      reliefOn: true,
+      reliefDistanceM: 15000
     } as const
     savePreferences(prefs, store)
     expect(loadPreferences(store)).toEqual(prefs)
@@ -41,6 +43,12 @@ describe('préférences de la vue', () => {
     expect(sanitizePreferences({ eyeHeight: 120 }).eyeHeight).toBe(50)
     expect(sanitizePreferences({ eyeHeight: 3.456 }).eyeHeight).toBe(3.46)
     expect(sanitizePreferences({}).eyeHeight).toBe(1.7)
+  })
+
+  it('relief lointain désactivé par défaut, distance bornée de 200 m à 20 km', () => {
+    expect(DEFAULT_PREFERENCES.reliefOn).toBe(false)
+    expect(sanitizePreferences({ reliefDistanceM: 50 }).reliefDistanceM).toBe(200)
+    expect(sanitizePreferences({ reliefDistanceM: 99_000 }).reliefDistanceM).toBe(20000)
   })
 
   it('arrondit le nombre d’étoiles au millier', () => {

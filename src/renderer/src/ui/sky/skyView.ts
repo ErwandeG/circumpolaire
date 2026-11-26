@@ -12,9 +12,11 @@ import {
   fieldOfView,
   focalFromSlider,
   frameSize,
+  reliefFromSlider,
   roundFocal,
   sliderFromEye,
   sliderFromFocal,
+  sliderFromRelief,
   type FrameOrientation
 } from '../../domain/optics'
 import { formatParisTime, parisDayOf, parisTime, type CalendarDay } from '../../domain/time'
@@ -27,9 +29,11 @@ import {
   type WalkContext
 } from '../../domain/terrain'
 import { checkPointInFrance } from '../../services/geocoding'
-import { STAR_COUNT_MIN, STAR_COUNT_STEP, clampEyeHeight } from '../../domain/preferences'
+import { STAR_COUNT_MIN, STAR_COUNT_STEP, clampEyeHeight, clampReliefDistance } from '../../domain/preferences'
 import { loadPreferences, savePreferences } from '../../services/storage'
+import { loadReliefGrids } from '../../services/reliefService'
 import { loadTerrain } from '../../services/terrainService'
+import { computeHorizonAsync } from './horizonClient'
 import { EXPORT_LONG_SIDE_PX, composeCapture, saveCapture, type CaptureInfo } from './exportImage'
 import { createMiniMap } from './miniMap'
 import { SkyScene } from './scene'
@@ -66,6 +70,12 @@ interface SkyElements {
   eyeNum: HTMLInputElement
   treesOn: HTMLButtonElement
   treesOff: HTMLButtonElement
+  reliefOn: HTMLButtonElement
+  reliefOff: HTMLButtonElement
+  reliefDist: HTMLInputElement
+  reliefDistNum: HTMLInputElement
+  busy: HTMLElement
+  busyText: HTMLElement
   radius50: HTMLButtonElement
   radius150: HTMLButtonElement
   radius500: HTMLButtonElement
@@ -119,7 +129,18 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     radius: prefs.radius as SceneRadius,
     miniMapCollapsed: prefs.miniMapCollapsed,
     eyeHeight: prefs.eyeHeight,
-    showTrees: prefs.showTrees
+    showTrees: prefs.showTrees,
+    reliefOn: prefs.reliefOn,
+    reliefDistance: prefs.reliefDistanceM
+  }
+
+  // --- Indicateur de chargement : visible tant qu'une tâche est en cours ---
+  const busyTasks = new Map<string, string>()
+  function setBusy(key: string, label: string | null): void {
+    if (label) busyTasks.set(key, label)
+    else busyTasks.delete(key)
+    el.busy.hidden = busyTasks.size === 0
+    el.busyText.textContent = [...busyTasks.values()].join(' · ')
   }
 
   // Les réglages sont enregistrés peu après chaque changement, pour le lancement suivant.
@@ -136,7 +157,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
           radius: state.radius,
           miniMapCollapsed: state.miniMapCollapsed,
           eyeHeight: state.eyeHeight,
-          showTrees: state.showTrees
+          showTrees: state.showTrees,
+          reliefOn: state.reliefOn,
+          reliefDistanceM: state.reliefDistance
         }),
       300
     )
@@ -253,6 +276,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     setNum(el.durationNum, state.durationMin)
     setNum(el.starsNum, state.starCount)
     setNum(el.eyeNum, state.eyeHeight)
+    setNum(el.reliefDistNum, Math.round(state.reliefDistance / 100) / 10)
   }
 
   function setNum(input: HTMLInputElement, value: number): void {
@@ -295,6 +319,11 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.eye.value = String(Math.round(sliderFromEye(state.eyeHeight) * 1000))
     el.treesOn.setAttribute('aria-pressed', String(state.showTrees))
     el.treesOff.setAttribute('aria-pressed', String(!state.showTrees))
+    el.reliefOn.setAttribute('aria-pressed', String(state.reliefOn))
+    el.reliefOff.setAttribute('aria-pressed', String(!state.reliefOn))
+    el.reliefDist.value = String(Math.round(sliderFromRelief(state.reliefDistance) * 1000))
+    el.reliefDist.disabled = !state.reliefOn
+    el.reliefDistNum.disabled = !state.reliefOn
     el.sensor.value = state.sensorId
     el.radius50.setAttribute('aria-pressed', String(state.radius === 50))
     el.radius150.setAttribute('aria-pressed', String(state.radius === 150))
@@ -338,6 +367,8 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     placeEye()
     showCoords()
     draw()
+    // Plus haut, on voit plus loin par-dessus les crêtes : le profil d'horizon est recalculé.
+    scheduleRelief()
   }
   el.eye.addEventListener('input', () => {
     state.eyeHeight = clampEyeHeight(eyeFromSlider(Number(el.eye.value) / 1000))
@@ -354,6 +385,23 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   }
   el.treesOn.addEventListener('click', () => setTrees(true))
   el.treesOff.addEventListener('click', () => setTrees(false))
+
+  // Relief lointain : affiché / masqué, distance de 200 m à 20 km.
+  const setRelief = (on: boolean) => {
+    if (state.reliefOn === on) return
+    state.reliefOn = on
+    rememberSettings()
+    syncInputs()
+    void loadRelief()
+  }
+  el.reliefOn.addEventListener('click', () => setRelief(true))
+  el.reliefOff.addEventListener('click', () => setRelief(false))
+  el.reliefDist.addEventListener('input', () => {
+    state.reliefDistance = clampReliefDistance(reliefFromSlider(Number(el.reliefDist.value) / 1000))
+    rememberSettings()
+    renderHud()
+    scheduleRelief()
+  })
 
   // Saisie au clavier dans chaque champ : validée par Entrée ou en quittant le champ, bornée.
   const bindNumber = (input: HTMLInputElement, apply: (value: number) => void) => {
@@ -390,6 +438,11 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   bindNumber(el.eyeNum, (v) => {
     state.eyeHeight = clampEyeHeight(v)
     applyEyeHeight()
+  })
+  bindNumber(el.reliefDistNum, (km) => {
+    state.reliefDistance = clampReliefDistance(km * 1000)
+    rememberSettings()
+    void loadRelief()
   })
   const setRadius = (r: SceneRadius) => {
     if (state.radius === r) return
@@ -558,13 +611,16 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     }
     el.terrain.textContent = 'Chargement des bâtiments et du relief (LiDAR HD)…'
     delete el.terrain.dataset.tone
+    setBusy('terrain', 'Bâtiments et relief proche')
     const res = await loadTerrain(state.observer.lat, state.observer.lon, state.radius, { trees: state.showTrees })
     if (id !== terrainRequest) return // une autre vue a été ouverte entre-temps
     loading = false
+    setBusy('terrain', null)
     if (res.status === 'error') {
       el.terrain.textContent = keepCurrent && walk ? `${res.message} Zone précédente conservée.` : `${res.message} Horizon plat.`
       el.terrain.dataset.tone = 'error'
       draw()
+      void loadRelief()
       return
     }
     const parts = [`${res.buildingCount} bâtiment${res.buildingCount > 1 ? 's' : ''} dans les ${state.radius} m`]
@@ -583,6 +639,46 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     miniMap.setZone(res.walk.frame.lat0, res.walk.frame.lon0, state.radius)
     placeEye()
     draw()
+    // Relief lointain ensuite, depuis la position finale (éventuellement sortie d'un bâtiment).
+    void loadRelief()
+  }
+
+  // --- Relief lointain : crêtes jusqu'à la distance choisie, au-delà de la scène détaillée ---
+  let reliefRequest = 0
+  async function loadRelief(): Promise<void> {
+    const id = ++reliefRequest
+    if (!state.reliefOn || state.reliefDistance <= state.radius) {
+      scene.setHorizon(null)
+      setBusy('relief', null)
+      draw()
+      return
+    }
+    setBusy('relief', 'Relief lointain')
+    const { lat, lon } = state.observer
+    try {
+      const grids = await loadReliefGrids(lat, lon, state.reliefDistance)
+      if (id !== reliefRequest) return
+      const result = await computeHorizonAsync(grids, lat, lon, state.eyeHeight, state.radius, state.reliefDistance)
+      if (id !== reliefRequest) return
+      scene.setHorizon(result)
+    } catch (e) {
+      if (id !== reliefRequest) return
+      const offline = e instanceof TypeError || (e instanceof DOMException && e.name === 'AbortError')
+      el.terrain.textContent = offline
+        ? 'Relief lointain indisponible : pas de connexion aux services de l’IGN.'
+        : `Relief lointain indisponible : ${(e as Error).message}`
+      el.terrain.dataset.tone = 'error'
+    } finally {
+      if (id === reliefRequest) setBusy('relief', null)
+      draw()
+    }
+  }
+
+  let reliefTimer: ReturnType<typeof setTimeout> | undefined
+  /** Recalcul différé : on attend la fin du glissement du curseur. */
+  function scheduleRelief(): void {
+    clearTimeout(reliefTimer)
+    reliefTimer = setTimeout(() => void loadRelief(), 350)
   }
 
   // --- Déplacement à pied : 1 m/s, flèches de l'écran ou du clavier ---
