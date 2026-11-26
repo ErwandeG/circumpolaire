@@ -20,7 +20,7 @@ export function gridResFor(radius: number): number {
 export const EYE_HEIGHT_M = 1.7
 /** Hauteur d'œil réglable, du ras du sol à un point haut (toit, colline). */
 export const EYE_HEIGHT_MIN_M = 0.2
-export const EYE_HEIGHT_MAX_M = 50
+export const EYE_HEIGHT_MAX_M = 100
 /** Au-delà de cette hauteur au-dessus du sol, hors emprise de bâtiment : végétation. */
 const VEGETATION_MIN_M = 1
 

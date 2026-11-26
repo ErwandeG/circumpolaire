@@ -40,9 +40,9 @@ export function sliderFromFocal(focalMm: number): number {
   return Math.log(f / FOCAL_MIN_MM) / Math.log(FOCAL_MAX_MM / FOCAL_MIN_MM)
 }
 
-/** Hauteur d'œil sur un curseur logarithmique : autant de place pour 0,2 → 3 m que pour 3 → 50 m. */
+/** Hauteur d'œil sur un curseur logarithmique : autant de place pour 0,2 → 4,5 m que pour 4,5 → 100 m. */
 const EYE_MIN = 0.2
-const EYE_MAX = 50
+const EYE_MAX = 100
 export function eyeFromSlider(position: number): number {
   const p = Math.max(0, Math.min(1, position))
   return EYE_MIN * Math.pow(EYE_MAX / EYE_MIN, p)

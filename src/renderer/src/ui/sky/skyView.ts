@@ -88,6 +88,9 @@ interface SkyElements {
   miniMapBox: HTMLElement
   miniMap: HTMLElement
   miniMapToggle: HTMLButtonElement
+  panel: HTMLElement
+  panelToggle: HTMLButtonElement
+  panelSummary: HTMLElement
 }
 
 export interface SkyView {
@@ -129,6 +132,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     starCount: Math.min(prefs.starCount, allStars.length),
     radius: prefs.radius as SceneRadius,
     miniMapCollapsed: prefs.miniMapCollapsed,
+    controlsCollapsed: prefs.controlsCollapsed,
     eyeHeight: prefs.eyeHeight,
     showTrees: prefs.showTrees,
     reliefOn: prefs.reliefOn,
@@ -157,6 +161,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
           starCount: state.starCount,
           radius: state.radius,
           miniMapCollapsed: state.miniMapCollapsed,
+          controlsCollapsed: state.controlsCollapsed,
           eyeHeight: state.eyeHeight,
           showTrees: state.showTrees,
           reliefOn: state.reliefOn,
@@ -278,6 +283,22 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     setNum(el.starsNum, state.starCount)
     setNum(el.eyeNum, state.eyeHeight)
     setNum(el.reliefDistNum, Math.round(state.reliefDistance / 100) / 10)
+    el.panelSummary.textContent = settingsSummary()
+  }
+
+  /** Réglages en une ligne, lisibles quand le panneau est replié. */
+  function settingsSummary(): string {
+    const nf = (x: number, digits = 1) => x.toLocaleString('fr-FR', { maximumFractionDigits: digits })
+    const parts = [
+      `${Math.round(state.focalMm)} mm ${state.orientation === 'portrait' ? 'portrait' : 'paysage'}`,
+      `${formatParisTime(state.start)}, pose ${state.durationMin} min`,
+      `${nf(state.starCount, 0)} étoiles`,
+      `œil à ${nf(state.eyeHeight)} m`,
+      `volumes ${state.radius} m`,
+      state.reliefOn ? `relief ${nf(state.reliefDistance / 1000)} km` : 'relief masqué'
+    ]
+    if (!state.showTrees) parts.push('arbres masqués')
+    return parts.join(' · ')
   }
 
   function setNum(input: HTMLInputElement, value: number): void {
@@ -759,6 +780,20 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       rememberSettings()
     }
   )
+
+  // --- Panneau des réglages repliable : replié, la vue 3D prend toute la hauteur ---
+  // (l'observateur de taille de la scène redimensionne alors l'image).
+  function applyPanel(): void {
+    el.panel.classList.toggle('is-collapsed', state.controlsCollapsed)
+    el.panelToggle.setAttribute('aria-expanded', String(!state.controlsCollapsed))
+    el.panelToggle.title = state.controlsCollapsed ? 'Afficher les réglages' : 'Replier les réglages pour agrandir la vue'
+  }
+  applyPanel()
+  el.panelToggle.addEventListener('click', () => {
+    state.controlsCollapsed = !state.controlsCollapsed
+    applyPanel()
+    rememberSettings()
+  })
 
   return {
     open(observer, night) {

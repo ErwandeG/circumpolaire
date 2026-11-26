@@ -74,7 +74,10 @@ const sky = setupSkyView(
     time: byId('sky-time'),
     miniMapBox: byId('minimap-box'),
     miniMap: byId('minimap'),
-    miniMapToggle: byId('minimap-toggle')
+    miniMapToggle: byId('minimap-toggle'),
+    panel: byId('sky-panel'),
+    panelToggle: byId('sky-panel-toggle'),
+    panelSummary: byId('sky-panel-summary')
   },
   () => {
     mapEl.hidden = false

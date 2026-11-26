@@ -22,6 +22,7 @@ describe('préférences de la vue', () => {
       starCount: 8000,
       radius: 500,
       miniMapCollapsed: true,
+      controlsCollapsed: true,
       eyeHeight: 12.5,
       showTrees: false,
       reliefOn: true,
@@ -38,9 +39,10 @@ describe('préférences de la vue', () => {
     expect(p.starCount).toBe(15000)
   })
 
-  it('borne la hauteur d’œil entre 20 cm et 50 m', () => {
+  it('borne la hauteur d’œil entre 20 cm et 100 m', () => {
     expect(sanitizePreferences({ eyeHeight: 0.05 }).eyeHeight).toBe(0.2)
-    expect(sanitizePreferences({ eyeHeight: 120 }).eyeHeight).toBe(50)
+    expect(sanitizePreferences({ eyeHeight: 120 }).eyeHeight).toBe(100)
+    expect(sanitizePreferences({ eyeHeight: 80 }).eyeHeight).toBe(80)
     expect(sanitizePreferences({ eyeHeight: 3.456 }).eyeHeight).toBe(3.46)
     expect(sanitizePreferences({}).eyeHeight).toBe(1.7)
   })

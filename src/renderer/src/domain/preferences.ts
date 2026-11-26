@@ -18,6 +18,8 @@ export interface ViewPreferences {
   starCount: number
   radius: SceneRadius
   miniMapCollapsed: boolean
+  /** Panneau des réglages replié (la vue 3D prend la place). */
+  controlsCollapsed: boolean
   /** Hauteur de l'œil au-dessus du sol, en mètres. */
   eyeHeight: number
   showTrees: boolean
@@ -46,6 +48,7 @@ export const DEFAULT_PREFERENCES: ViewPreferences = {
   starCount: 2000,
   radius: SCENE_RADIUS_M,
   miniMapCollapsed: false,
+  controlsCollapsed: false,
   eyeHeight: EYE_HEIGHT_M,
   showTrees: true,
   reliefOn: false,
@@ -81,6 +84,7 @@ export function sanitizePreferences(raw: unknown): ViewPreferences {
         : clamp(Math.round(stars / STAR_COUNT_STEP) * STAR_COUNT_STEP, STAR_COUNT_MIN, STAR_COUNT_MAX),
     radius: (SCENE_RADII_M as readonly number[]).includes(p.radius as number) ? (p.radius as SceneRadius) : d.radius,
     miniMapCollapsed: typeof p.miniMapCollapsed === 'boolean' ? p.miniMapCollapsed : d.miniMapCollapsed,
+    controlsCollapsed: typeof p.controlsCollapsed === 'boolean' ? p.controlsCollapsed : d.controlsCollapsed,
     eyeHeight: eye === undefined ? d.eyeHeight : clampEyeHeight(eye),
     showTrees: typeof p.showTrees === 'boolean' ? p.showTrees : d.showTrees,
     reliefOn: typeof p.reliefOn === 'boolean' ? p.reliefOn : d.reliefOn,
