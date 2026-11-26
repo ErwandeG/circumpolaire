@@ -1,4 +1,4 @@
-﻿# Circumpolaire
+# Circumpolaire
 
 Application Windows pour préparer des photos circumpolaires en ville.
 Cahier des charges : document « Cahier des charges — Appli circumpolaire ».
