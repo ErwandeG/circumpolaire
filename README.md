@@ -59,3 +59,5 @@ Code sous licence [MIT](LICENSE). Données tierces, sous leur propre licence :
 - [x] Jalon 5 : finitions (export d'image, réglages mémorisés, icône, installateur)
 - [x] Version 0.3.0 : bâtiments reconstruits, éclairage de nuit, volumes jusqu'à 500 m,
       arbres masquables, hauteur de vue réglable, relief lointain jusqu'à 200 km
+- [x] Version 0.4.0 : transition volumes 3D → relief (silhouette de la ville jusqu'à 3 km,
+      perspective atmosphérique, lueur de l'horizon), nouvel essai automatique si l'IGN ne répond pas
