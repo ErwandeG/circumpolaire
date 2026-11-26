@@ -50,7 +50,8 @@ scripts/                  génération du catalogue et de l'icône (build/icon.p
 Code sous licence [MIT](LICENSE). Données tierces, sous leur propre licence :
 
 - catalogue d'étoiles `src/renderer/src/data/stars.json` : base HYG v4.1, licence CC BY-SA 4.0 ;
-- fond de carte, adresses, LiDAR HD, BD TOPO et MNT RGE ALTI : IGN, chargés en ligne depuis la Géoplateforme (licence Etalab 2.0).
+- fond de carte, adresses, LiDAR HD, BD TOPO et MNT RGE ALTI : IGN, chargés en ligne depuis la Géoplateforme (licence Etalab 2.0) ;
+- bâtiments HD (WIP, Strasbourg) : [maquette 3D 2022 de l'Eurométropole de Strasbourg](https://data.strasbourg.eu/explore/dataset/odata3d_maquette_2022/), licence Etalab 2.0 ; seule la géométrie LoD2 (OBJ) est lue, par lecture partielle des archives (`src/renderer/src/services/hdService.ts`).
 
 ## Avancement
 
