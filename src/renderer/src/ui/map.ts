@@ -32,6 +32,9 @@ export function createMap(container: HTMLElement, initial: Place): PlaceMap {
 
   L.control.scale({ imperial: false }).addTo(map)
 
+  // La carte se recale quand son conteneur change de taille (fenêtre redimensionnée).
+  new ResizeObserver(() => map.invalidateSize()).observe(container)
+
   // Un cercle plutôt qu'une icône image : pas de fichier à embarquer.
   const marker = L.circleMarker([initial.lat, initial.lon], {
     radius: 8,

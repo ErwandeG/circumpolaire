@@ -35,6 +35,30 @@
           <p id="current-label" class="current-label"></p>
           <p id="current-meta" class="current-meta"></p>
         </section>
+
+        <section class="calendar" aria-labelledby="calendar-title">
+          <h2 id="calendar-title" class="section-title">Calendrier lunaire</h2>
+          <div class="cal-header">
+            <button id="cal-prev" class="cal-nav" type="button" aria-label="Mois précédent">‹</button>
+            <span id="cal-month" class="cal-month"></span>
+            <button id="cal-next" class="cal-nav" type="button" aria-label="Mois suivant">›</button>
+            <button id="cal-today" class="cal-today" type="button">Aujourd’hui</button>
+          </div>
+          <div id="cal-grid" class="cal-grid"></div>
+          <ul class="legend">
+            <li><span class="swatch tranche-green"></span>0–25 %</li>
+            <li><span class="swatch tranche-yellow"></span>25–50 %</li>
+            <li><span class="swatch tranche-orange"></span>50–75 %</li>
+            <li><span class="swatch tranche-red"></span>75–100 %</li>
+            <li class="legend-wide">
+              <span class="presence legend-bar"><span class="presence-moon" style="left: 55%; width: 45%"></span></span>
+              Nuit : sombre = Lune couchée, clair = Lune levée
+            </li>
+            <li class="legend-wide"><span class="day-badge legend-badge">N</span>Nuit nautique (pas de nuit astronomique)</li>
+          </ul>
+        </section>
+
+        <section id="night-detail" class="detail" aria-live="polite"></section>
       </aside>
 
       <main id="map" class="map" aria-label="Carte"></main>

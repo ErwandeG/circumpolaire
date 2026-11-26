@@ -21,13 +21,14 @@ src/renderer/index.html   page de l'appli
 src/renderer/src/
   domain/                 logique pure, testée sans interface
   services/               accès externes (IGN) et stockage local
-  ui/                     carte et recherche
+  domain/astro/           fenêtre de nuit, Lune (astronomy-engine)
+  ui/                     carte, recherche, calendrier
 ```
 
 ## Avancement
 
 - [x] Jalon 1 : socle, carte et lieu
-- [ ] Jalon 2 : calendrier lunaire
+- [x] Jalon 2 : calendrier lunaire (tests contre les éphémérides IMCCE, tolérance 2 min)
 - [ ] Jalon 3 : ciel à hauteur d'homme
 - [ ] Jalon 4 : bâtiments, arbres et relief (LiDAR HD)
 - [ ] Jalon 5 : finitions

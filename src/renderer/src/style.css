@@ -10,6 +10,12 @@
   --error: #b42318;
   --error-bg: #fdecea;
   --info-bg: #eef3fd;
+  --t-green: #cdeccb;
+  --t-yellow: #f8e7a6;
+  --t-orange: #f8cfa8;
+  --t-red: #f4b4ae;
+  --night: #1e2a44;
+  --moonlight: #f3e9b8;
   color-scheme: light dark;
 }
 
@@ -25,6 +31,12 @@
     --error: #ff8a80;
     --error-bg: #3a1d1b;
     --info-bg: #1b2433;
+    --t-green: #24502a;
+    --t-yellow: #5a4c17;
+    --t-orange: #66401f;
+    --t-red: #6b2a26;
+    --night: #0b1020;
+    --moonlight: #e9dc9c;
   }
 }
 
@@ -44,7 +56,7 @@ body {
 
 .app {
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: 380px 1fr;
   height: 100vh;
 }
 
@@ -174,4 +186,183 @@ body {
 
 .map {
   height: 100%;
+}
+
+/* Calendrier lunaire */
+
+.cal-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.cal-month {
+  flex: 1;
+  font-weight: 600;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.cal-nav,
+.cal-today {
+  padding: 4px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cal-nav {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.weekday {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--muted);
+}
+
+.day {
+  position: relative;
+  height: 44px;
+  padding: 4px 4px 0;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.day:hover {
+  filter: brightness(0.95);
+}
+
+.day.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.day-num {
+  font-size: 13px;
+}
+
+.day.is-today .day-num {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.day-badge {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.tranche-green {
+  background: var(--t-green);
+}
+
+.tranche-yellow {
+  background: var(--t-yellow);
+}
+
+.tranche-orange {
+  background: var(--t-orange);
+}
+
+.tranche-red {
+  background: var(--t-red);
+}
+
+.presence {
+  position: absolute;
+  right: 4px;
+  bottom: 5px;
+  left: 4px;
+  height: 6px;
+  overflow: hidden;
+  background: var(--night);
+  border-radius: 3px;
+}
+
+.presence-moon {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--moonlight);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--muted);
+  list-style: none;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-wide {
+  flex-basis: 100%;
+}
+
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.legend-bar {
+  position: relative;
+  inset: auto;
+  display: inline-block;
+  flex: none;
+  width: 36px;
+}
+
+.legend-badge {
+  position: static;
+  display: inline-block;
+  width: 12px;
+  text-align: center;
+}
+
+.detail {
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.detail-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.detail-line,
+.detail-empty {
+  margin: 4px 0 0;
 }

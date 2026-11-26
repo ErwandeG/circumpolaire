@@ -1,6 +1,7 @@
 import './style.css'
 import { kindLabel, type Place } from './domain/place'
 import { loadLastPlace, saveLastPlace } from './services/storage'
+import { setupCalendar } from './ui/calendar'
 import { createMap } from './ui/map'
 import { setupSearch } from './ui/search'
 
@@ -25,6 +26,18 @@ const initial = loadLastPlace()
 const placeMap = createMap(byId('map'), initial)
 showCurrent(initial)
 
+const calendar = setupCalendar(
+  {
+    title: byId('cal-month'),
+    prev: byId('cal-prev'),
+    next: byId('cal-next'),
+    today: byId('cal-today'),
+    grid: byId('cal-grid'),
+    detail: byId('night-detail')
+  },
+  initial
+)
+
 setupSearch(
   {
     form: byId('search-form'),
@@ -36,6 +49,7 @@ setupSearch(
   (place) => {
     placeMap.showPlace(place)
     showCurrent(place)
+    calendar.setPlace(place)
     saveLastPlace(place)
   }
 )
