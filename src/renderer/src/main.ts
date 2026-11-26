@@ -71,7 +71,6 @@ const sky = setupSkyView(
     eye: byId('eye'),
     eyeNum: byId('eye-num'),
     treesOn: byId('trees-on'),
-    treesOff: byId('trees-off'),
     hdOn: byId('hd-on'),
     reliefOn: byId('relief-on'),
     reliefDist: byId('relief-dist'),

@@ -74,7 +74,6 @@ interface SkyElements {
   eye: HTMLInputElement
   eyeNum: HTMLInputElement
   treesOn: HTMLButtonElement
-  treesOff: HTMLButtonElement
   hdOn: HTMLButtonElement
   reliefOn: HTMLButtonElement
   reliefDist: HTMLInputElement
@@ -362,8 +361,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.stars.step = String(STAR_COUNT_STEP)
     el.stars.value = String(state.starCount)
     el.eye.value = String(Math.round(sliderFromEye(state.eyeHeight) * 1000))
-    el.treesOn.setAttribute('aria-pressed', String(state.showTrees))
-    el.treesOff.setAttribute('aria-pressed', String(!state.showTrees))
+    el.treesOn.setAttribute('aria-checked', String(state.showTrees))
     el.hdOn.setAttribute('aria-checked', String(state.hdBuildings))
     el.reliefOn.setAttribute('aria-checked', String(state.reliefOn))
     el.reliefDist.value = String(Math.round(sliderFromRelief(state.reliefDistance) * 1000))
@@ -429,8 +427,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     syncInputs()
     void loadBuildings(true)
   }
-  el.treesOn.addEventListener('click', () => setTrees(true))
-  el.treesOff.addEventListener('click', () => setTrees(false))
+  el.treesOn.addEventListener('click', () => setTrees(!state.showTrees))
 
   // Bâtiments HD (maquette 3D de Strasbourg) : la zone est reconstruite.
   const setHd = (on: boolean) => {

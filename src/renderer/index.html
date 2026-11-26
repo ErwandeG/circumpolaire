@@ -137,21 +137,18 @@
 
             <fieldset class="group">
               <legend>Décor</legend>
-              <div class="ctrl-pair">
-                <div class="ctrl">
-                  <span class="ctrl-label">Volumes 3D jusqu’à</span>
-                  <div class="seg" role="group" aria-label="Rayon des volumes 3D">
-                    <button id="radius-50" type="button">50 m</button>
-                    <button id="radius-150" type="button">150 m</button>
-                    <button id="radius-500" type="button" title="Plus lent à charger ; relief au pas de 1 m">500 m</button>
-                  </div>
+              <div class="ctrl">
+                <span class="ctrl-label">Volumes 3D jusqu’à</span>
+                <div class="seg" role="group" aria-label="Rayon des volumes 3D">
+                  <button id="radius-50" type="button">50 m</button>
+                  <button id="radius-150" type="button">150 m</button>
+                  <button id="radius-500" type="button" title="Plus lent à charger ; relief au pas de 1 m">500 m</button>
                 </div>
-                <div class="ctrl">
+              </div>
+              <div class="ctrl">
+                <div class="ctrl-head">
                   <span class="ctrl-label">Arbres</span>
-                  <div class="seg" role="group" aria-label="Arbres">
-                    <button id="trees-on" type="button">Affichés</button>
-                    <button id="trees-off" type="button" title="Ramène au sol ce qui dépasse hors des bâtiments (arbres, mais aussi kiosques, abribus)">Masqués</button>
-                  </div>
+                  <button id="trees-on" class="switch" type="button" role="switch" aria-checked="true" aria-label="Arbres" title="Désactivé : ce qui dépasse hors des bâtiments est ramené au sol (arbres, mais aussi kiosques, abribus)"><span class="switch-knob"></span></button>
                 </div>
               </div>
               <div class="ctrl">
