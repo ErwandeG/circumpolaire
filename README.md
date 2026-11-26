@@ -34,6 +34,8 @@ src/renderer/src/
   domain/astro/           fenêtre de nuit, Lune, phases, ciel (astronomy-engine)
   domain/geo/             Lambert 93, emprises de bâtiments, repère local
   domain/terrain.ts       surface 3D à partir du MNS/MNT LiDAR HD
+  domain/buildings3d.ts   bâtiments reconstruits : murs BD TOPO, toits LiDAR
+  domain/horizon.ts       relief lointain : profil d'horizon et lignes de crête
   services/               accès externes (IGN) et stockage local
   data/                   catalogue d'étoiles
   ui/                     carte, recherche, calendrier
@@ -46,7 +48,7 @@ scripts/                  génération du catalogue et de l'icône (build/icon.p
 Code sous licence [MIT](LICENSE). Données tierces, sous leur propre licence :
 
 - catalogue d'étoiles `src/renderer/src/data/stars.json` : base HYG v4.1, licence CC BY-SA 4.0 ;
-- fond de carte, adresses, LiDAR HD et BD TOPO : IGN, chargés en ligne depuis la Géoplateforme (licence Etalab 2.0).
+- fond de carte, adresses, LiDAR HD, BD TOPO et MNT RGE ALTI : IGN, chargés en ligne depuis la Géoplateforme (licence Etalab 2.0).
 
 ## Avancement
 
@@ -55,3 +57,5 @@ Code sous licence [MIT](LICENSE). Données tierces, sous leur propre licence :
 - [x] Jalon 3 : ciel à hauteur d'homme
 - [x] Jalon 4 : bâtiments, arbres et relief (LiDAR HD, BD TOPO en repli)
 - [x] Jalon 5 : finitions (export d'image, réglages mémorisés, icône, installateur)
+- [x] Version 0.3.0 : bâtiments reconstruits, éclairage de nuit, volumes jusqu'à 500 m,
+      arbres masquables, hauteur de vue réglable, relief lointain jusqu'à 200 km

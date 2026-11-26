@@ -29,7 +29,8 @@ export function createMiniMap(
   const map = L.map(container, {
     zoomControl: false,
     attributionControl: false,
-    minZoom: 14,
+    // Assez de dézoom pour situer le relief lointain (jusqu'à 200 km).
+    minZoom: 7,
     maxZoom: 19
   }).setView([48.5734, 7.7521], 18)
   L.tileLayer(PLAN_IGN_URL, { maxZoom: 19 }).addTo(map)
@@ -62,24 +63,41 @@ export function createMiniMap(
   map.on('click', (e: L.LeafletMouseEvent) => onPick(e.latlng.lat, e.latlng.lng))
 
   let zoneCenter: [number, number] | null = null
+  let last: { lat: number; lon: number; azimuth: number; hFov: number } | null = null
+
+  /**
+   * Cône de visée : sa longueur suit le zoom de la carte (environ 35 % de la hauteur visible),
+   * pour rester lisible de près comme de loin.
+   */
+  function drawCone(): void {
+    if (!last) return
+    const { lat, lon, azimuth, hFov } = last
+    const b = map.getBounds()
+    const visibleHeightM = map.distance(b.getNorthWest(), b.getSouthWest())
+    const length = Math.max(CONE_LENGTH_M, 0.35 * visibleHeightM)
+    const f = localFrame(lat, lon)
+    const half = Math.min(85, hFov / 2)
+    const pts: L.LatLngExpression[] = [[lat, lon]]
+    for (let a = -half; a <= half + 0.01; a += half / 6) {
+      const d = stepToward(azimuth + a, length, 0)
+      const p = fromLocal(f, d.e, d.n)
+      pts.push([p.lat, p.lon])
+    }
+    cone.setLatLngs(pts)
+  }
+  map.on('zoomend', drawCone)
+
   const api: MiniMap = {
     update(lat, lon, azimuthDeg, hFovDeg) {
       marker.setLatLng([lat, lon])
-      // Le cercle des 60 m reste centré sur le point de chargement des bâtiments.
+      // Le cercle des volumes 3D reste centré sur le point de chargement des bâtiments.
       if (!zoneCenter) zoneCenter = [lat, lon]
       zone.setLatLng(zoneCenter)
-      const f = localFrame(lat, lon)
-      const half = Math.min(85, hFovDeg / 2)
-      const pts: L.LatLngExpression[] = [[lat, lon]]
-      for (let a = -half; a <= half + 0.01; a += half / 6) {
-        const d = stepToward(azimuthDeg + a, CONE_LENGTH_M, 0)
-        const p = fromLocal(f, d.e, d.n)
-        pts.push([p.lat, p.lon])
-      }
-      cone.setLatLngs(pts)
+      last = { lat, lon, azimuth: azimuthDeg, hFov: hFovDeg }
       // On recentre seulement quand le point sort du cœur de la carte.
       const inner = map.getBounds().pad(-0.3)
       if (!inner.contains([lat, lon])) map.panTo([lat, lon], { animate: false })
+      drawCone()
     },
     setZone(lat, lon, radiusM) {
       zoneCenter = [lat, lon]

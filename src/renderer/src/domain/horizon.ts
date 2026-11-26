@@ -105,6 +105,7 @@ export function computeHorizon(p: HorizonParams): HorizonProfile {
     let d = p.minDistance
     while (d <= p.maxDistance) {
       const { h, res } = reliefAt(p.grids, p.x + dx * d, p.y + dy * d)
+      // Pas qui grandit avec la distance : ~1 700 échantillons par direction jusqu'à 200 km.
       const step = Math.max(res * 0.8, d * 0.004)
       if (!Number.isNaN(h)) {
         const ang = Math.atan2(h - curvatureDrop(d) - p.eyeAltitude, d) / DEG

@@ -28,7 +28,7 @@ export interface ViewPreferences {
 }
 
 export const RELIEF_DISTANCE_MIN_M = 200
-export const RELIEF_DISTANCE_MAX_M = 20000
+export const RELIEF_DISTANCE_MAX_M = 200000
 
 /** Distance du relief bornée et arrondie à 10 m. */
 export function clampReliefDistance(m: number): number {

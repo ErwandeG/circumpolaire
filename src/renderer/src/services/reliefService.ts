@@ -13,7 +13,9 @@ const FALLBACK_LAYER = 'ELEVATION.ELEVATIONGRIDCOVERAGE.SRTM3'
 const RINGS = [
   { half: 2500, res: 10 },
   { half: 8000, res: 25 },
-  { half: 20500, res: 50 }
+  { half: 20500, res: 50 },
+  { half: 60000, res: 150 },
+  { half: 201000, res: 500 }
 ] as const
 
 async function fetchRaw(layer: string, minX: number, minY: number, maxX: number, maxY: number, cols: number, rows: number) {

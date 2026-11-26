@@ -45,10 +45,11 @@ describe('préférences de la vue', () => {
     expect(sanitizePreferences({}).eyeHeight).toBe(1.7)
   })
 
-  it('relief lointain désactivé par défaut, distance bornée de 200 m à 20 km', () => {
+  it('relief lointain désactivé par défaut, distance bornée de 200 m à 200 km', () => {
     expect(DEFAULT_PREFERENCES.reliefOn).toBe(false)
     expect(sanitizePreferences({ reliefDistanceM: 50 }).reliefDistanceM).toBe(200)
-    expect(sanitizePreferences({ reliefDistanceM: 99_000 }).reliefDistanceM).toBe(20000)
+    expect(sanitizePreferences({ reliefDistanceM: 99_000 }).reliefDistanceM).toBe(99_000)
+    expect(sanitizePreferences({ reliefDistanceM: 900_000 }).reliefDistanceM).toBe(200_000)
   })
 
   it('arrondit le nombre d’étoiles au millier', () => {
