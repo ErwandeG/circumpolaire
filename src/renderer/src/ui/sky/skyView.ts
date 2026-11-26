@@ -26,6 +26,8 @@ import { formatParisTime, parisDayOf, parisTime, type CalendarDay } from '../../
 import { distanceM, fromLocal, localFrame, stepToward } from '../../domain/geo/local'
 import {
   EYE_HEIGHT_M,
+  EYE_HEIGHT_MAX_M,
+  EYE_HEIGHT_MIN_M,
   eyePosition,
   isBlocked,
   type SceneRadius,
@@ -776,9 +778,23 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     }, 700)
   }
 
+  // Hauteur au clavier : valeur exacte cumulée (le réglage est arrondi au centimètre),
+  // bornée comme le curseur.
+  let eyeExact = state.eyeHeight
+  function rise(upM: number): void {
+    if (Math.abs(eyeExact - state.eyeHeight) > 0.01) eyeExact = state.eyeHeight
+    eyeExact = Math.min(EYE_HEIGHT_MAX_M, Math.max(EYE_HEIGHT_MIN_M, eyeExact + upM))
+    const h = clampEyeHeight(eyeExact)
+    if (h === state.eyeHeight) return
+    state.eyeHeight = h
+    syncInputs()
+    applyEyeHeight()
+  }
+
   setupWalker({
     isActive: () => !el.root.hidden,
     onStep: step,
+    onRise: rise,
     onStop: stopWalking
   })
 
