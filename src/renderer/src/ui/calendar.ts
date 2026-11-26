@@ -27,7 +27,7 @@ const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 
 const WINDOW_LABELS = {
   astronomical: 'Nuit astronomique',
-  nautical: 'Nuit nautique (pas de nuit astronomique)'
+  nautical: 'Nuit nautique (nuit astronomique absente ou de moins d’1 h)'
 } as const
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -138,7 +138,7 @@ export function setupCalendar(elements: CalendarElements, initialPlace: Place): 
       btn.append(el('span', 'day-num', String(night.day.day)))
       if (night.window.kind === 'nautical') {
         const badge = el('span', 'day-badge', 'N')
-        badge.title = 'Nuit nautique : pas de nuit astronomique'
+        badge.title = 'Nuit nautique : nuit astronomique absente ou de moins d’1 h'
         btn.append(badge)
       }
       const bar = presenceBar(night)

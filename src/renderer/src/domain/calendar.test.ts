@@ -48,6 +48,14 @@ describe('fenêtre de nuit (référence IMCCE)', () => {
     expectNear(w.end, '2024-06-22T01:45')
   })
 
+  it('passe en nuit nautique quand la nuit astronomique dure moins d’1 h', () => {
+    // 26 juin 2027 à Strasbourg : environ 33 min de nuit astronomique seulement.
+    const w = nightWindow({ year: 2027, month: 6, day: 26 }, LAT, LON)
+    expect(w.kind).toBe('nautical')
+    if (w.kind === 'none') return
+    expect(w.end.getTime() - w.start.getTime()).toBeGreaterThan(3 * 3600_000)
+  })
+
   it('garde la nuit astronomique au solstice à Perpignan', () => {
     expect(nightWindow({ year: 2024, month: 6, day: 21 }, 42.6887, 2.8948).kind).toBe('astronomical')
   })
