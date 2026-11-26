@@ -368,6 +368,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.reliefDist.disabled = !state.reliefOn
     el.reliefDistNum.disabled = !state.reliefOn
     el.sensor.value = state.sensorId
+    el.sensor.title = sensor().label
     el.radius50.setAttribute('aria-pressed', String(state.radius === 50))
     el.radius150.setAttribute('aria-pressed', String(state.radius === 150))
     el.radius500.setAttribute('aria-pressed', String(state.radius === 500))

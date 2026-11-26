@@ -245,15 +245,17 @@ body {
 
 .sky-bar {
   display: flex;
+  /* Fenêtre étroite : les boutons passent sous le titre plutôt que de l'écraser. */
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 10px 14px;
   border-bottom: 1px solid #1c2533;
 }
 
 .sky-title {
   display: flex;
-  flex: 1;
+  flex: 1 1 280px;
   flex-direction: column;
   min-width: 0;
 }
@@ -447,6 +449,21 @@ body {
 
 .ctrl-pair > .ctrl {
   flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* La liste des capteurs (libellés longs) ne dépasse jamais de son groupe : texte tronqué au besoin. */
+.ctrl {
+  min-width: 0;
+}
+
+.ctrl select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Libellé et interrupteur sur la même ligne, le curseur dessous. */
@@ -567,6 +584,8 @@ body {
 
 .sky {
   grid-template-rows: auto 1fr auto auto;
+  /* Une seule colonne qui suit la fenêtre : un contenu large (liste, barre) ne doit pas l'élargir. */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Rappel des touches de déplacement : dernière ligne de la vue */
