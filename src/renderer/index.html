@@ -13,6 +13,13 @@
       <aside class="panel">
         <h1 class="app-title">Star Trail Planner</h1>
 
+        <div id="panel-tabs" class="panel-tabs" role="tablist" hidden>
+          <button id="tab-place" type="button" role="tab" aria-selected="true" aria-controls="pane-place">Lieu et calendrier</button>
+          <button id="tab-settings" type="button" role="tab" aria-selected="false" aria-controls="pane-settings">Réglages</button>
+        </div>
+
+        <div id="pane-place" class="pane" role="tabpanel">
+
         <form class="search" id="search-form" autocomplete="off">
           <label class="search-label" for="search-input">Adresse ou ville</label>
           <div class="search-row">
@@ -60,7 +67,131 @@
         </section>
 
         <section id="night-detail" class="detail" aria-live="polite"></section>
+        </div>
+
+        <div id="pane-settings" class="pane" role="tabpanel" hidden>
+          <div class="sky-controls">
+            <fieldset class="group">
+              <legend>Appareil</legend>
+              <div class="ctrl">
+                <label for="focal">Focale <output id="focal-eq"></output></label>
+                <div class="ctrl-slider">
+                  <input id="focal" type="range" min="0" max="1000" step="1" />
+                  <input id="focal-num" class="num" type="number" min="10" max="600" step="1" aria-label="Focale en millimètres" />
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+              <div class="ctrl-pair">
+                <div class="ctrl">
+                  <label for="sensor">Capteur</label>
+                  <select id="sensor"></select>
+                </div>
+                <div class="ctrl">
+                  <span class="ctrl-label">Cadrage</span>
+                  <div class="seg" role="group" aria-label="Cadrage">
+                    <button id="orient-landscape" type="button">Paysage</button>
+                    <button id="orient-portrait" type="button">Portrait</button>
+                  </div>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset class="group">
+              <legend>Pose</legend>
+              <div class="ctrl">
+                <label for="sky-date">Début de pose (heure de Paris)</label>
+                <div class="ctrl-row">
+                  <input id="sky-date" type="date" />
+                  <input id="sky-time" type="time" step="60" />
+                </div>
+              </div>
+              <div class="ctrl">
+                <label for="duration">Durée de pose</label>
+                <div class="ctrl-slider">
+                  <input id="duration" type="range" min="5" max="120" step="1" />
+                  <input id="duration-num" class="num" type="number" min="5" max="120" step="1" aria-label="Durée de pose en minutes" />
+                  <span class="unit">min</span>
+                </div>
+              </div>
+              <div class="ctrl">
+                <label for="stars">Étoiles affichées <output id="stars-out"></output></label>
+                <div class="ctrl-slider">
+                  <input id="stars" type="range" min="1000" max="15000" step="1000" />
+                  <input id="stars-num" class="num" type="number" min="1000" max="15000" step="1000" aria-label="Nombre d’étoiles" />
+                  <span class="unit">étoiles</span>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset class="group">
+              <legend>Point de vue</legend>
+              <div class="ctrl">
+                <label for="eye">Hauteur du point de vue</label>
+                <div class="ctrl-slider">
+                  <input id="eye" type="range" min="0" max="1000" step="1" />
+                  <input id="eye-num" class="num" type="number" min="0.2" max="100" step="0.1" aria-label="Hauteur du point de vue en mètres" />
+                  <span class="unit">m</span>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset class="group">
+              <legend>Décor</legend>
+              <div class="ctrl-pair">
+                <div class="ctrl">
+                  <span class="ctrl-label">Volumes 3D jusqu’à</span>
+                  <div class="seg" role="group" aria-label="Rayon des volumes 3D">
+                    <button id="radius-50" type="button">50 m</button>
+                    <button id="radius-150" type="button">150 m</button>
+                    <button id="radius-500" type="button" title="Plus lent à charger ; relief au pas de 1 m">500 m</button>
+                  </div>
+                </div>
+                <div class="ctrl">
+                  <span class="ctrl-label">Arbres</span>
+                  <div class="seg" role="group" aria-label="Arbres">
+                    <button id="trees-on" type="button">Affichés</button>
+                    <button id="trees-off" type="button" title="Ramène au sol ce qui dépasse hors des bâtiments (arbres, mais aussi kiosques, abribus)">Masqués</button>
+                  </div>
+                </div>
+              </div>
+              <div class="ctrl">
+                <div class="ctrl-head">
+                  <span class="ctrl-label">Bâtiments HD <small class="wip">WIP Strasbourg</small></span>
+                  <div class="seg seg-small" role="group" aria-label="Bâtiments HD">
+                    <button id="hd-off" type="button">Masqués</button>
+                    <button id="hd-on" type="button" title="Maquette 3D LoD2 de l’Eurométropole de Strasbourg (2022) à la place des bâtiments reconstruits (BD TOPO et LiDAR). Ailleurs, rien ne change.">Affichés</button>
+                  </div>
+                </div>
+              </div>
+              <div class="ctrl">
+                <div class="ctrl-head">
+                  <span class="ctrl-label">Relief lointain</span>
+                  <div class="seg seg-small" role="group" aria-label="Relief lointain">
+                    <button id="relief-off" type="button">Masqué</button>
+                    <button id="relief-on" type="button" title="Ligne des crêtes jusqu’à la distance choisie (MNT IGN), silhouette de la ville jusqu’à 3 km">Affiché</button>
+                  </div>
+                </div>
+                <div class="ctrl-slider">
+                  <input id="relief-dist" type="range" min="0" max="1000" step="1" aria-label="Distance du relief" />
+                  <input id="relief-dist-num" class="num" type="number" min="0.2" max="200" step="0.1" aria-label="Distance du relief en kilomètres" />
+                  <span class="unit">km</span>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+
+          <p class="sky-credit">
+                <span class="sky-legend"><i class="lg lg-building"></i>bâtiments</span>
+                <span class="sky-legend"><i class="lg lg-vegetation"></i>arbres</span>
+                <span class="sky-legend"><i class="lg lg-fallback"></i>volumes BD TOPO (pas de LiDAR)</span>
+                · Relief et bâtiments : IGN LiDAR HD et BD TOPO ; bâtiments HD : maquette 3D 2022 de l’Eurométropole de Strasbourg (licence Etalab 2.0) ; relief lointain : IGN RGE ALTI.
+                Étoiles : base HYG v4.1 (Hipparcos, Yale Bright Star, Gliese), licence CC BY-SA 4.0. Calculs : astronomy-engine.
+              </p>
+        </div>
       </aside>
+      <div id="panel-resizer" class="panel-resizer" role="separator" aria-orientation="vertical" title="Glisser pour élargir ou réduire le panneau">
+        <button id="panel-toggle" class="panel-toggle" type="button" aria-expanded="true" title="Replier le panneau">‹</button>
+      </div>
 
       <main class="main">
         <div id="map" class="map" aria-label="Carte"></div>
@@ -73,6 +204,7 @@
               <strong id="sky-place"></strong>
               <span id="sky-coords" class="sky-sub"></span>
               <span id="sky-terrain" class="sky-sub"></span>
+              <span id="sky-panel-summary" class="sky-sub sky-summary"></span>
             </div>
             <button id="sky-export" class="sky-btn" type="button" title="Enregistrer l’image du cadre avec le lieu, l’heure et les réglages">Exporter l’image</button>
             <button id="sky-moon" class="sky-btn" type="button">Viser la Lune</button>
@@ -98,135 +230,12 @@
           </div>
 
           <div id="sky-warnings" class="sky-warnings" role="status"></div>
-
-          <section id="sky-panel" class="sky-panel" aria-label="Réglages de la vue">
-            <button id="sky-panel-toggle" class="sky-panel-head" type="button" aria-expanded="true" aria-controls="sky-panel-body">
-              <span class="sky-panel-title">Réglages</span>
-              <span id="sky-panel-summary" class="sky-panel-summary"></span>
-              <span class="sky-panel-chevron" aria-hidden="true"></span>
-            </button>
-
-            <div id="sky-panel-body" class="sky-panel-body">
-              <div class="sky-controls">
-                <fieldset class="group">
-                  <legend>Appareil</legend>
-                  <div class="ctrl">
-                    <label for="focal">Focale <output id="focal-eq"></output></label>
-                    <div class="ctrl-slider">
-                      <input id="focal" type="range" min="0" max="1000" step="1" />
-                      <input id="focal-num" class="num" type="number" min="10" max="600" step="1" aria-label="Focale en millimètres" />
-                      <span class="unit">mm</span>
-                    </div>
-                  </div>
-                  <div class="ctrl-pair">
-                    <div class="ctrl">
-                      <label for="sensor">Capteur</label>
-                      <select id="sensor"></select>
-                    </div>
-                    <div class="ctrl">
-                      <span class="ctrl-label">Cadrage</span>
-                      <div class="seg" role="group" aria-label="Cadrage">
-                        <button id="orient-landscape" type="button">Paysage</button>
-                        <button id="orient-portrait" type="button">Portrait</button>
-                      </div>
-                    </div>
-                  </div>
-                </fieldset>
-
-                <fieldset class="group">
-                  <legend>Pose</legend>
-                  <div class="ctrl">
-                    <label for="sky-date">Début de pose (heure de Paris)</label>
-                    <div class="ctrl-row">
-                      <input id="sky-date" type="date" />
-                      <input id="sky-time" type="time" step="60" />
-                    </div>
-                  </div>
-                  <div class="ctrl">
-                    <label for="duration">Durée de pose</label>
-                    <div class="ctrl-slider">
-                      <input id="duration" type="range" min="5" max="120" step="1" />
-                      <input id="duration-num" class="num" type="number" min="5" max="120" step="1" aria-label="Durée de pose en minutes" />
-                      <span class="unit">min</span>
-                    </div>
-                  </div>
-                  <div class="ctrl">
-                    <label for="stars">Étoiles affichées <output id="stars-out"></output></label>
-                    <div class="ctrl-slider">
-                      <input id="stars" type="range" min="1000" max="15000" step="1000" />
-                      <input id="stars-num" class="num" type="number" min="1000" max="15000" step="1000" aria-label="Nombre d’étoiles" />
-                      <span class="unit">étoiles</span>
-                    </div>
-                  </div>
-                </fieldset>
-
-                <fieldset class="group">
-                  <legend>Point de vue et décor</legend>
-                  <div class="ctrl">
-                    <label for="eye">Hauteur du point de vue</label>
-                    <div class="ctrl-slider">
-                      <input id="eye" type="range" min="0" max="1000" step="1" />
-                      <input id="eye-num" class="num" type="number" min="0.2" max="100" step="0.1" aria-label="Hauteur du point de vue en mètres" />
-                      <span class="unit">m</span>
-                    </div>
-                  </div>
-                  <div class="ctrl-pair">
-                    <div class="ctrl">
-                      <span class="ctrl-label">Volumes 3D jusqu’à</span>
-                      <div class="seg" role="group" aria-label="Rayon des volumes 3D">
-                        <button id="radius-50" type="button">50 m</button>
-                        <button id="radius-150" type="button">150 m</button>
-                        <button id="radius-500" type="button" title="Plus lent à charger ; relief au pas de 1 m">500 m</button>
-                      </div>
-                    </div>
-                    <div class="ctrl">
-                      <span class="ctrl-label">Arbres</span>
-                      <div class="seg" role="group" aria-label="Arbres">
-                        <button id="trees-on" type="button">Affichés</button>
-                        <button id="trees-off" type="button" title="Ramène au sol ce qui dépasse hors des bâtiments (arbres, mais aussi kiosques, abribus)">Masqués</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="ctrl">
-                    <div class="ctrl-head">
-                      <span class="ctrl-label">Bâtiments HD <small class="wip">WIP Strasbourg</small></span>
-                      <div class="seg seg-small" role="group" aria-label="Bâtiments HD">
-                        <button id="hd-off" type="button">Masqués</button>
-                        <button id="hd-on" type="button" title="Maquette 3D LoD2 de l’Eurométropole de Strasbourg (2022) à la place des bâtiments reconstruits (BD TOPO et LiDAR). Ailleurs, rien ne change.">Affichés</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="ctrl">
-                    <div class="ctrl-head">
-                      <span class="ctrl-label">Relief lointain</span>
-                      <div class="seg seg-small" role="group" aria-label="Relief lointain">
-                        <button id="relief-off" type="button">Masqué</button>
-                        <button id="relief-on" type="button" title="Ligne des crêtes jusqu’à la distance choisie (MNT IGN), silhouette de la ville jusqu’à 3 km">Affiché</button>
-                      </div>
-                    </div>
-                    <div class="ctrl-slider">
-                      <input id="relief-dist" type="range" min="0" max="1000" step="1" aria-label="Distance du relief" />
-                      <input id="relief-dist-num" class="num" type="number" min="0.2" max="200" step="0.1" aria-label="Distance du relief en kilomètres" />
-                      <span class="unit">km</span>
-                    </div>
-                  </div>
-                </fieldset>
-              </div>
-
-              <p class="sky-credit">
-                <span class="sky-legend"><i class="lg lg-building"></i>bâtiments</span>
-                <span class="sky-legend"><i class="lg lg-vegetation"></i>arbres</span>
-                <span class="sky-legend"><i class="lg lg-fallback"></i>volumes BD TOPO (pas de LiDAR)</span>
-                · Relief et bâtiments : IGN LiDAR HD et BD TOPO ; bâtiments HD : maquette 3D 2022 de l’Eurométropole de Strasbourg (licence Etalab 2.0) ; relief lointain : IGN RGE ALTI.
-                Étoiles : base HYG v4.1 (Hipparcos, Yale Bright Star, Gliese), licence CC BY-SA 4.0. Calculs : astronomy-engine.
+          <p class="sky-keys">
+            Se déplacer (1 m/s) avec les flèches du clavier :
+            <kbd>↑</kbd> avancer <kbd>↓</kbd> reculer <kbd>←</kbd><kbd>→</kbd> pas de côté.
+            Cliquez d’abord dans l’image si un réglage est actif.
               </p>
-              <p class="sky-keys">
-                Se déplacer (1 m/s) avec les flèches du clavier :
-                <kbd>↑</kbd> avancer <kbd>↓</kbd> reculer <kbd>←</kbd><kbd>→</kbd> pas de côté.
-                Cliquez d’abord dans l’image si un réglage est actif.
-              </p>
-            </div>
-          </section>
+
         </section>
       </main>
     </div>

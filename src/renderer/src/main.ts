@@ -7,6 +7,7 @@ import { setupCalendar } from './ui/calendar'
 import { createMap } from './ui/map'
 import { setupSearch } from './ui/search'
 import { setupSkyView, type Observer } from './ui/sky/skyView'
+import { setupSidebar } from './ui/sidebar'
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id)
@@ -30,6 +31,18 @@ function showCurrent(place: Place): void {
 
 let currentPlace = loadLastPlace()
 showCurrent(currentPlace)
+
+// --- Panneau de gauche : largeur réglable, onglets en vue 3D ---
+const sidebar = setupSidebar({
+  app: document.querySelector<HTMLElement>('.app')!,
+  resizer: byId('panel-resizer'),
+  toggle: byId('panel-toggle'),
+  tabs: byId('panel-tabs'),
+  tabPlace: byId('tab-place'),
+  tabSettings: byId('tab-settings'),
+  panePlace: byId('pane-place'),
+  paneSettings: byId('pane-settings')
+})
 
 // --- Vue du ciel ---
 const sky = setupSkyView(
@@ -78,19 +91,21 @@ const sky = setupSkyView(
     miniMapBox: byId('minimap-box'),
     miniMap: byId('minimap'),
     miniMapToggle: byId('minimap-toggle'),
-    panel: byId('sky-panel'),
-    panelToggle: byId('sky-panel-toggle'),
+    panel: document.querySelector<HTMLElement>('.app')!,
+    panelToggle: byId('panel-toggle'),
     panelSummary: byId('sky-panel-summary')
   },
   () => {
     mapEl.hidden = false
     mapHint.hidden = false
+    sidebar.setSkyMode(false)
   }
 )
 
 function openSky(observer: Observer, night: CalendarDay): void {
   mapEl.hidden = true
   mapHint.hidden = true
+  sidebar.setSkyMode(true)
   sky.open(observer, night)
 }
 

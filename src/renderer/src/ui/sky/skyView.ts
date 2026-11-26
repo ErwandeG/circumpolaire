@@ -821,12 +821,15 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     }
   )
 
-  // --- Panneau des réglages repliable : replié, la vue 3D prend toute la hauteur ---
+  // --- Panneau de gauche repliable : replié, la carte ou la vue 3D prend toute la largeur ---
   // (l'observateur de taille de la scène redimensionne alors l'image).
   function applyPanel(): void {
     el.panel.classList.toggle('is-collapsed', state.controlsCollapsed)
     el.panelToggle.setAttribute('aria-expanded', String(!state.controlsCollapsed))
-    el.panelToggle.title = state.controlsCollapsed ? 'Afficher les réglages' : 'Replier les réglages pour agrandir la vue'
+    el.panelToggle.title = state.controlsCollapsed ? 'Afficher le panneau' : 'Replier le panneau pour agrandir la vue'
+    el.panelToggle.textContent = state.controlsCollapsed ? '›' : '‹'
+    // La carte (Leaflet) se recale sur l'événement de redimensionnement de la fenêtre.
+    window.dispatchEvent(new Event('resize'))
   }
   applyPanel()
   el.panelToggle.addEventListener('click', () => {

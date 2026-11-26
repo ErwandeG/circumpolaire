@@ -56,8 +56,131 @@ body {
 
 .app {
   display: grid;
-  grid-template-columns: 380px 1fr;
+  /* Panneau de gauche à largeur réglable (poignée), repliable. */
+  grid-template-columns: var(--panel-w, 380px) 6px minmax(0, 1fr);
   height: 100vh;
+}
+
+.app.is-collapsed {
+  grid-template-columns: 0 6px minmax(0, 1fr);
+}
+
+/* Colonnes fixées : masquer le panneau ne décale pas la vue dans la grille. */
+.app > .panel {
+  grid-column: 1;
+}
+
+.app > .panel-resizer {
+  grid-column: 2;
+}
+
+.app > .main {
+  grid-column: 3;
+}
+
+.app.is-collapsed .panel {
+  display: none;
+}
+
+/* Poignée entre le panneau et la vue : glisser pour élargir ou réduire, bouton pour replier. */
+.panel-resizer {
+  position: relative;
+  background: var(--border);
+  cursor: col-resize;
+}
+
+.panel-resizer:hover,
+.panel-resizer.is-dragging {
+  background: #3b82f6;
+}
+
+.app.is-collapsed .panel-resizer {
+  cursor: default;
+}
+
+.panel-toggle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 10;
+  width: 18px;
+  height: 44px;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: #cbd5e1;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+}
+
+.panel-toggle:hover {
+  color: #fff;
+  background: #2563eb;
+}
+
+/* Onglets du panneau, en vue 3D : lieu et calendrier, ou réglages de la vue. */
+.panel-tabs {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.panel-tabs[hidden],
+.pane[hidden] {
+  display: none;
+}
+
+.panel-tabs button {
+  flex: 1;
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: #cbd5e1;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.panel-tabs button[aria-selected='true'] {
+  color: #fff;
+  background: #2563eb;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pane > * {
+  flex-shrink: 0;
+}
+
+/* Réglages dans le panneau : une colonne, deux si le panneau est élargi. */
+.pane .sky-controls {
+  padding: 0;
+  color: #e6e9ed;
+}
+
+.pane .sky-credit {
+  padding: 0;
+}
+
+/* Résumé des réglages dans la barre du haut, seulement quand le panneau est replié. */
+.sky-summary {
+  display: none;
+}
+
+.app.is-collapsed .sky-summary {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel {
@@ -415,7 +538,7 @@ body {
 /* Trois groupes côte à côte, les uns sous les autres si la fenêtre est étroite. */
 .sky-controls {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 10px 18px;
   padding: 10px 14px 8px;
 }
@@ -469,9 +592,14 @@ body {
 /* Libellé et interrupteur sur la même ligne, le curseur dessous. */
 .ctrl-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 8px;
+}
+
+.ctrl-head .seg {
+  flex-shrink: 0;
 }
 
 .wip {
