@@ -12,7 +12,11 @@ export interface PlaceMap {
   showPlace(place: Place): void
 }
 
-export function createMap(container: HTMLElement, initial: Place): PlaceMap {
+export function createMap(
+  container: HTMLElement,
+  initial: Place,
+  onPick: (lat: number, lon: number) => void
+): PlaceMap {
   const map = L.map(container, {
     center: [initial.lat, initial.lon],
     zoom: zoomFor(initial.kind),
@@ -44,6 +48,8 @@ export function createMap(container: HTMLElement, initial: Place): PlaceMap {
     fillOpacity: 1
   }).addTo(map)
   marker.bindTooltip(initial.label)
+
+  map.on('click', (e: L.LeafletMouseEvent) => onPick(e.latlng.lat, e.latlng.lng))
 
   return {
     showPlace(place) {

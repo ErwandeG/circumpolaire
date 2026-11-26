@@ -13,6 +13,15 @@ Cahier des charges : document « Cahier des charges — Appli circumpolaire ».
 | `npm test` | Tests automatiques |
 | `npm run typecheck` | Vérification des types TypeScript |
 
+## Catalogue d'étoiles
+
+`src/renderer/src/data/stars.json` contient les 2 000 étoiles les plus brillantes, extraites de la
+[base HYG v4.1](https://github.com/astronexus/HYG-Database) (licence CC BY-SA 4.0). Pour le régénérer :
+
+```
+node scripts/build-stars.mjs <chemin vers hygdata_v41.csv>
+```
+
 ## Organisation
 
 ```
@@ -22,13 +31,16 @@ src/renderer/src/
   domain/                 logique pure, testée sans interface
   services/               accès externes (IGN) et stockage local
   domain/astro/           fenêtre de nuit, Lune (astronomy-engine)
+  data/                   catalogue d'étoiles
   ui/                     carte, recherche, calendrier
+  ui/sky/                 vue du ciel (three.js)
+scripts/                  génération du catalogue
 ```
 
 ## Avancement
 
 - [x] Jalon 1 : socle, carte et lieu
 - [x] Jalon 2 : calendrier lunaire (tests contre les éphémérides IMCCE, tolérance 2 min)
-- [ ] Jalon 3 : ciel à hauteur d'homme
+- [x] Jalon 3 : ciel à hauteur d'homme (sans bâtiments)
 - [ ] Jalon 4 : bâtiments, arbres et relief (LiDAR HD)
 - [ ] Jalon 5 : finitions

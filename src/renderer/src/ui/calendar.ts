@@ -21,6 +21,8 @@ interface CalendarElements {
 
 export interface MoonCalendar {
   setPlace(place: Place): void
+  /** Nuit sélectionnée (aujourd'hui par défaut). */
+  selectedNight(): CalendarDay
 }
 
 const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
@@ -76,7 +78,11 @@ function presenceText(night: NightInfo): string[] {
   return lines
 }
 
-export function setupCalendar(elements: CalendarElements, initialPlace: Place): MoonCalendar {
+export function setupCalendar(
+  elements: CalendarElements,
+  initialPlace: Place,
+  onOpenSky: (night: CalendarDay) => void
+): MoonCalendar {
   const today = parisDayOf(new Date())
   let place = initialPlace
   let view = { year: today.year, month: today.month }
@@ -119,6 +125,12 @@ export function setupCalendar(elements: CalendarElements, initialPlace: Place): 
     d.append(illum)
 
     for (const line of presenceText(night)) d.append(el('p', 'detail-line', line))
+
+    const open = el('button', 'detail-action', 'Voir le ciel cette nuit depuis le lieu de calcul')
+    open.type = 'button'
+    open.addEventListener('click', () => onOpenSky(night.day))
+    d.append(open)
+    d.append(el('p', 'detail-hint', 'Ou cliquez sur la carte pour choisir le point de vue exact.'))
   }
 
   function render(): void {
@@ -176,6 +188,7 @@ export function setupCalendar(elements: CalendarElements, initialPlace: Place): 
       place = p
       compute()
       render()
-    }
+    },
+    selectedNight: () => selected
   }
 }

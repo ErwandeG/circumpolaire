@@ -184,8 +184,265 @@ body {
   margin: 0;
 }
 
+.main {
+  position: relative;
+  min-width: 0;
+  height: 100vh;
+}
+
 .map {
   height: 100%;
+}
+
+.map[hidden] {
+  display: none;
+}
+
+.map-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 500;
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.map-hint[data-tone='error'] {
+  color: var(--error);
+  background: var(--error-bg);
+}
+
+.map-hint[hidden] {
+  display: none;
+}
+
+/* Vue du ciel */
+
+.sky {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  height: 100%;
+  color: #e6e9ed;
+  background: #03060d;
+}
+
+.sky[hidden] {
+  display: none;
+}
+
+.sky-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1c2533;
+}
+
+.sky-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sky-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sky-sub {
+  font-size: 12px;
+  color: #8b97a6;
+}
+
+.sky-btn {
+  padding: 6px 12px;
+  font: inherit;
+  color: #e6e9ed;
+  background: #111827;
+  border: 1px solid #2b3647;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sky-btn-accent {
+  color: #fff;
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.sky-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sky-frame {
+  position: relative;
+  outline: 1px solid #334155;
+}
+
+.sky-frame canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.sky-frame canvas:active {
+  cursor: grabbing;
+}
+
+.sky-cross {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  background:
+    linear-gradient(#ffffff55, #ffffff55) center / 1px 100% no-repeat,
+    linear-gradient(#ffffff55, #ffffff55) center / 100% 1px no-repeat;
+}
+
+.sky-hud {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+
+.sky-warnings {
+  padding: 0 14px;
+}
+
+.sky-warning {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #fde68a;
+  background: #3a2e0b;
+  border-radius: 6px;
+}
+
+.sky-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 18px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid #1c2533;
+}
+
+.ctrl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #8b97a6;
+}
+
+.ctrl-wide {
+  grid-column: span 2;
+}
+
+.ctrl output {
+  margin-left: 6px;
+  font-weight: 600;
+  color: #e6e9ed;
+}
+
+.ctrl input[type='range'] {
+  width: 100%;
+  accent-color: #3b82f6;
+}
+
+.ctrl select,
+.ctrl input[type='date'],
+.ctrl input[type='time'] {
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: #e6e9ed;
+  background: #111827;
+  border: 1px solid #2b3647;
+  border-radius: 6px;
+  color-scheme: dark;
+}
+
+.ctrl-row {
+  display: flex;
+  gap: 6px;
+}
+
+.seg {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid #2b3647;
+  border-radius: 6px;
+}
+
+.seg button {
+  flex: 1;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: #cbd5e1;
+  background: #111827;
+  border: none;
+  cursor: pointer;
+}
+
+.seg button[aria-pressed='true'] {
+  color: #fff;
+  background: #2563eb;
+}
+
+.sky-credit {
+  margin: 0;
+  padding: 0 14px 10px;
+  font-size: 11px;
+  color: #5b6676;
+}
+
+.sky {
+  grid-template-rows: auto 1fr auto auto auto;
+}
+
+.detail-action {
+  width: 100%;
+  margin-top: 10px;
+  padding: 7px 10px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.detail-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 /* Calendrier lunaire */

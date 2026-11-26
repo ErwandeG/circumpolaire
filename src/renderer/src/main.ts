@@ -1,9 +1,12 @@
 import './style.css'
 import { kindLabel, type Place } from './domain/place'
+import type { CalendarDay } from './domain/time'
+import { checkPointInFrance } from './services/geocoding'
 import { loadLastPlace, saveLastPlace } from './services/storage'
 import { setupCalendar } from './ui/calendar'
 import { createMap } from './ui/map'
 import { setupSearch } from './ui/search'
+import { setupSkyView, type Observer } from './ui/sky/skyView'
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id)
@@ -13,6 +16,9 @@ function byId<T extends HTMLElement>(id: string): T {
 
 const currentLabel = byId<HTMLParagraphElement>('current-label')
 const currentMeta = byId<HTMLParagraphElement>('current-meta')
+const mapEl = byId('map')
+const mapHint = byId('map-hint')
+const HINT = 'Cliquez sur la carte pour voir le ciel depuis ce point.'
 
 function showCurrent(place: Place): void {
   currentLabel.textContent = place.label
@@ -22,10 +28,46 @@ function showCurrent(place: Place): void {
   ].join(' · ')
 }
 
-const initial = loadLastPlace()
-const placeMap = createMap(byId('map'), initial)
-showCurrent(initial)
+let currentPlace = loadLastPlace()
+showCurrent(currentPlace)
 
+// --- Vue du ciel ---
+const sky = setupSkyView(
+  {
+    root: byId('sky'),
+    back: byId('sky-back'),
+    pole: byId('sky-pole'),
+    moon: byId('sky-moon'),
+    place: byId('sky-place'),
+    coords: byId('sky-coords'),
+    stage: byId('sky-stage'),
+    frame: byId('sky-frame'),
+    canvas: byId('sky-canvas'),
+    hud: byId('sky-hud'),
+    warnings: byId('sky-warnings'),
+    focal: byId('focal'),
+    focalOut: byId('focal-out'),
+    duration: byId('duration'),
+    durationOut: byId('duration-out'),
+    sensor: byId('sensor'),
+    landscape: byId('orient-landscape'),
+    portrait: byId('orient-portrait'),
+    date: byId('sky-date'),
+    time: byId('sky-time')
+  },
+  () => {
+    mapEl.hidden = false
+    mapHint.hidden = false
+  }
+)
+
+function openSky(observer: Observer, night: CalendarDay): void {
+  mapEl.hidden = true
+  mapHint.hidden = true
+  sky.open(observer, night)
+}
+
+// --- Calendrier ---
 const calendar = setupCalendar(
   {
     title: byId('cal-month'),
@@ -35,9 +77,36 @@ const calendar = setupCalendar(
     grid: byId('cal-grid'),
     detail: byId('night-detail')
   },
-  initial
+  currentPlace,
+  (night) => openSky({ lat: currentPlace.lat, lon: currentPlace.lon, label: currentPlace.label }, night)
 )
 
+// --- Carte : un clic ouvre la vue depuis ce point ---
+let hintTimer: ReturnType<typeof setTimeout> | undefined
+function flashHint(text: string, tone: 'info' | 'error'): void {
+  mapHint.textContent = text
+  mapHint.dataset.tone = tone
+  clearTimeout(hintTimer)
+  hintTimer = setTimeout(() => {
+    mapHint.textContent = HINT
+    delete mapHint.dataset.tone
+  }, 4000)
+}
+
+const placeMap = createMap(mapEl, currentPlace, async (lat, lon) => {
+  flashHint('Vérification du point…', 'info')
+  const check = await checkPointInFrance(lat, lon)
+  if (check.status === 'outside') {
+    flashHint('Ce point est hors de France métropolitaine : choisissez un point en France.', 'error')
+    return
+  }
+  mapHint.textContent = HINT
+  delete mapHint.dataset.tone
+  const label = check.status === 'inside' && check.label ? `Près de ${check.label}` : 'Point choisi sur la carte'
+  openSky({ lat, lon, label }, calendar.selectedNight())
+})
+
+// --- Recherche ---
 setupSearch(
   {
     form: byId('search-form'),
@@ -47,6 +116,7 @@ setupSearch(
     results: byId('search-results')
   },
   (place) => {
+    currentPlace = place
     placeMap.showPlace(place)
     showCurrent(place)
     calendar.setPlace(place)

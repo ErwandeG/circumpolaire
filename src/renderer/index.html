@@ -61,7 +61,64 @@
         <section id="night-detail" class="detail" aria-live="polite"></section>
       </aside>
 
-      <main id="map" class="map" aria-label="Carte"></main>
+      <main class="main">
+        <div id="map" class="map" aria-label="Carte"></div>
+        <p id="map-hint" class="map-hint">Cliquez sur la carte pour voir le ciel depuis ce point.</p>
+
+        <section id="sky" class="sky" hidden aria-label="Vue du ciel à hauteur d’homme">
+          <header class="sky-bar">
+            <button id="sky-back" class="sky-btn" type="button">← Carte</button>
+            <div class="sky-title">
+              <strong id="sky-place"></strong>
+              <span id="sky-coords" class="sky-sub"></span>
+            </div>
+            <button id="sky-moon" class="sky-btn" type="button">Viser la Lune</button>
+            <button id="sky-pole" class="sky-btn sky-btn-accent" type="button">Viser le pôle</button>
+          </header>
+
+          <div id="sky-stage" class="sky-stage">
+            <div id="sky-frame" class="sky-frame">
+              <canvas id="sky-canvas"></canvas>
+              <div class="sky-cross" aria-hidden="true"></div>
+              <div id="sky-hud" class="sky-hud"></div>
+            </div>
+          </div>
+
+          <div id="sky-warnings" class="sky-warnings" role="status"></div>
+
+          <div class="sky-controls">
+            <div class="ctrl ctrl-wide">
+              <label for="focal">Focale <output id="focal-out"></output></label>
+              <input id="focal" type="range" min="0" max="1000" step="1" />
+            </div>
+            <div class="ctrl ctrl-wide">
+              <label for="duration">Durée de pose <output id="duration-out"></output></label>
+              <input id="duration" type="range" min="5" max="120" step="1" />
+            </div>
+            <div class="ctrl">
+              <label for="sensor">Capteur</label>
+              <select id="sensor"></select>
+            </div>
+            <div class="ctrl">
+              <span class="ctrl-label">Cadrage</span>
+              <div class="seg" role="group" aria-label="Cadrage">
+                <button id="orient-landscape" type="button">Paysage</button>
+                <button id="orient-portrait" type="button">Portrait</button>
+              </div>
+            </div>
+            <div class="ctrl">
+              <label for="sky-date">Début de pose (heure de Paris)</label>
+              <div class="ctrl-row">
+                <input id="sky-date" type="date" />
+                <input id="sky-time" type="time" step="60" />
+              </div>
+            </div>
+          </div>
+          <p class="sky-credit">
+            Étoiles : base HYG v4.1 (Hipparcos, Yale Bright Star, Gliese), licence CC BY-SA 4.0. Calculs : astronomy-engine.
+          </p>
+        </section>
+      </main>
     </div>
     <script type="module" src="./src/main.ts"></script>
   </body>

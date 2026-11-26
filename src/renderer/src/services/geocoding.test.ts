@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { geocode, parseGeocodeResponse } from './geocoding'
+import { checkPointInFrance, geocode, parseGeocodeResponse } from './geocoding'
 
 function feature(props: Record<string, unknown>, lon: number, lat: number) {
   return { type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: props }
@@ -51,6 +51,39 @@ describe('parseGeocodeResponse', () => {
       features: [feature({ label: 'X', type: 'poi', depcode: '67' }, 7.7, 48.5)]
     })
     expect(p.kind).toBe('locality')
+  })
+})
+
+describe('checkPointInFrance', () => {
+  const reply = (lon: number, lat: number) => async () =>
+    new Response(JSON.stringify({ features: [feature({ label: 'Adresse', type: 'street', depcode: '67' }, lon, lat)] }))
+
+  it('accepte un point proche d’une adresse française', async () => {
+    const r = await checkPointInFrance(48.58, 7.75, reply(7.751, 48.581))
+    expect(r).toEqual({ status: 'inside', label: 'Adresse' })
+  })
+
+  it('refuse un point loin de toute adresse française (Allemagne)', async () => {
+    // Fribourg-en-Brisgau : la plus proche adresse française est à plus de 5 km.
+    const r = await checkPointInFrance(47.999, 7.842, reply(7.58, 47.98))
+    expect(r.status).toBe('outside')
+  })
+
+  it('refuse sans requête un point hors du rectangle métropolitain', async () => {
+    let called = false
+    const r = await checkPointInFrance(52.5, 13.4, async () => {
+      called = true
+      return new Response('{}')
+    })
+    expect(r.status).toBe('outside')
+    expect(called).toBe(false)
+  })
+
+  it('laisse passer sans vérification si le service est injoignable', async () => {
+    const r = await checkPointInFrance(48.58, 7.75, async () => {
+      throw new TypeError('offline')
+    })
+    expect(r.status).toBe('unverified')
   })
 })
 
