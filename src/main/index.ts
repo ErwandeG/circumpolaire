@@ -9,6 +9,8 @@ function createWindow(): void {
     minHeight: 560,
     title: 'Circumpolaire',
     autoHideMenuBar: true,
+    // Une fois empaquetée, l'appli prend l'icône de l'exécutable ; en développement, celle du dépôt.
+    ...(app.isPackaged ? {} : { icon: join(__dirname, '../../build/icon.png') }),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

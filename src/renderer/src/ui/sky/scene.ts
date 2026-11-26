@@ -283,7 +283,7 @@ export class SkyScene {
         new THREE.ShaderMaterial({
           vertexShader: pointsVertex,
           fragmentShader: pointsFragment,
-          uniforms: { pixelRatio: { value: window.devicePixelRatio } },
+          uniforms: { pixelRatio: { value: this.pointScale } },
           transparent: true,
           depthWrite: false,
           blending: THREE.AdditiveBlending
@@ -442,6 +442,17 @@ export class SkyScene {
     this.camera.aspect = aspect
     this.camera.updateProjectionMatrix()
   }
+
+  /**
+   * Taille des points d'étoiles en pixels de rendu par pixel d'écran.
+   * Pour un export agrandi, les étoiles gardent la même taille relative qu'à l'écran.
+   */
+  setPointScale(scale: number): void {
+    this.pointScale = scale
+    const mat = this.starPoints?.material as THREE.ShaderMaterial | undefined
+    if (mat) mat.uniforms.pixelRatio.value = scale
+  }
+  private pointScale = window.devicePixelRatio
 
   /** Position de l'œil dans le repère de la scène chargée (mètres). */
   setEye(x: number, y: number, z: number): void {

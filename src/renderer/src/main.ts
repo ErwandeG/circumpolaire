@@ -38,6 +38,7 @@ const sky = setupSkyView(
     back: byId('sky-back'),
     pole: byId('sky-pole'),
     moon: byId('sky-moon'),
+    exportButton: byId('sky-export'),
     place: byId('sky-place'),
     coords: byId('sky-coords'),
     terrain: byId('sky-terrain'),

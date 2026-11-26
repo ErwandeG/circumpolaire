@@ -38,7 +38,7 @@ src/renderer/src/
   data/                   catalogue d'étoiles
   ui/                     carte, recherche, calendrier
   ui/sky/                 vue du ciel (three.js), mini-carte, déplacement au clavier
-scripts/                  génération du catalogue
+scripts/                  génération du catalogue et de l'icône (build/icon.png)
 ```
 
 ## Licence
@@ -54,4 +54,4 @@ Code sous licence [MIT](LICENSE). Données tierces, sous leur propre licence :
 - [x] Jalon 2 : calendrier lunaire (tests contre les éphémérides IMCCE, tolérance 2 min)
 - [x] Jalon 3 : ciel à hauteur d'homme
 - [x] Jalon 4 : bâtiments, arbres et relief (LiDAR HD, BD TOPO en repli)
-- [ ] Jalon 5 : finitions
+- [x] Jalon 5 : finitions (export d'image, réglages mémorisés, icône, installateur)

@@ -22,7 +22,9 @@ export function createMiniMap(
   box: HTMLElement,
   container: HTMLElement,
   toggle: HTMLButtonElement,
-  onPick: (lat: number, lon: number) => void
+  onPick: (lat: number, lon: number) => void,
+  startCollapsed = false,
+  onToggle: (collapsed: boolean) => void = () => {}
 ): MiniMap {
   const map = L.map(container, {
     zoomControl: false,
@@ -90,11 +92,17 @@ export function createMiniMap(
     }
   }
 
-  toggle.addEventListener('click', () => {
-    const collapsed = box.classList.toggle('is-collapsed')
+  const applyCollapsed = (collapsed: boolean) => {
+    box.classList.toggle('is-collapsed', collapsed)
     toggle.setAttribute('aria-expanded', String(!collapsed))
     toggle.textContent = collapsed ? 'Carte ▴' : 'Carte ▾'
     if (!collapsed) setTimeout(() => map.invalidateSize(), 0)
+  }
+  applyCollapsed(startCollapsed)
+  toggle.addEventListener('click', () => {
+    const collapsed = !box.classList.contains('is-collapsed')
+    applyCollapsed(collapsed)
+    onToggle(collapsed)
   })
 
   return api

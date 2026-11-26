@@ -17,14 +17,16 @@ import { formatParisTime, parisDayOf, parisTime, type CalendarDay } from '../../
 import { distanceM, fromLocal, localFrame, stepToward } from '../../domain/geo/local'
 import {
   EYE_HEIGHT_M,
-  SCENE_RADIUS_M,
   eyePosition,
   isBlocked,
   type SceneRadius,
   type WalkContext
 } from '../../domain/terrain'
 import { checkPointInFrance } from '../../services/geocoding'
+import { STAR_COUNT_MIN, STAR_COUNT_STEP } from '../../domain/preferences'
+import { loadPreferences, savePreferences } from '../../services/storage'
 import { loadTerrain } from '../../services/terrainService'
+import { EXPORT_LONG_SIDE_PX, composeCapture, saveCapture, type CaptureInfo } from './exportImage'
 import { createMiniMap } from './miniMap'
 import { SkyScene } from './scene'
 import { setupWalker } from './walker'
@@ -40,6 +42,7 @@ interface SkyElements {
   back: HTMLButtonElement
   pole: HTMLButtonElement
   moon: HTMLButtonElement
+  exportButton: HTMLButtonElement
   place: HTMLElement
   coords: HTMLElement
   terrain: HTMLElement
@@ -72,9 +75,6 @@ export interface SkyView {
 
 /** Catalogue trié par éclat : afficher N étoiles = prendre les N premières. */
 const allStars = starData.stars as StarRow[]
-export const STAR_COUNT_MIN = 1000
-export const STAR_COUNT_MAX = Math.min(15000, allStars.length)
-export const STAR_COUNT_STEP = 1000
 const fields = new Map<number, StarField>()
 function starField(count: number): StarField {
   let f = fields.get(count)
@@ -95,17 +95,37 @@ const fmt1 = (x: number) => x.toLocaleString('fr-FR', { maximumFractionDigits: 1
 
 export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   const scene = new SkyScene(el.canvas)
+  const prefs = loadPreferences()
   const state = {
     observer: { lat: 48.5734, lon: 7.7521, label: 'Strasbourg' } as Observer,
     start: new Date(),
-    durationMin: 30,
-    focalMm: 24,
+    durationMin: prefs.durationMin,
+    focalMm: prefs.focalMm,
     sensorId: SENSORS[0].id,
-    orientation: 'landscape' as FrameOrientation,
+    orientation: prefs.orientation as FrameOrientation,
     azimuth: 0,
     altitude: 48.6,
-    starCount: 2000,
-    radius: SCENE_RADIUS_M as SceneRadius
+    starCount: Math.min(prefs.starCount, allStars.length),
+    radius: prefs.radius as SceneRadius,
+    miniMapCollapsed: prefs.miniMapCollapsed
+  }
+
+  // Les réglages sont enregistrés peu après chaque changement, pour le lancement suivant.
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
+  function rememberSettings(): void {
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(
+      () =>
+        savePreferences({
+          focalMm: state.focalMm,
+          durationMin: state.durationMin,
+          orientation: state.orientation,
+          starCount: state.starCount,
+          radius: state.radius,
+          miniMapCollapsed: state.miniMapCollapsed
+        }),
+      300
+    )
   }
 
   for (const s of SENSORS) {
@@ -248,7 +268,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.duration.max = String(DURATION_MAX)
     el.duration.value = String(state.durationMin)
     el.stars.min = String(STAR_COUNT_MIN)
-    el.stars.max = String(STAR_COUNT_MAX)
+    el.stars.max = String(Math.min(15000, allStars.length))
     el.stars.step = String(STAR_COUNT_STEP)
     el.stars.value = String(state.starCount)
     el.sensor.value = state.sensorId
@@ -271,21 +291,25 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   // --- Interactions ---
   el.focal.addEventListener('input', () => {
     state.focalMm = focalFromSlider(Number(el.focal.value) / 1000)
+    rememberSettings()
     draw()
   })
   el.duration.addEventListener('input', () => {
     state.durationMin = Number(el.duration.value)
+    rememberSettings()
     renderHud()
     scheduleSky()
   })
   el.stars.addEventListener('input', () => {
     state.starCount = Number(el.stars.value)
+    rememberSettings()
     renderHud()
     scheduleSky()
   })
   const setRadius = (r: SceneRadius) => {
     if (state.radius === r) return
     state.radius = r
+    rememberSettings()
     syncInputs()
     // On garde la scène affichée pendant le chargement de la nouvelle zone.
     void loadBuildings(true)
@@ -294,11 +318,13 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   el.radius150.addEventListener('click', () => setRadius(150))
   el.landscape.addEventListener('click', () => {
     state.orientation = 'landscape'
+    rememberSettings()
     syncInputs()
     layout()
   })
   el.portrait.addEventListener('click', () => {
     state.orientation = 'portrait'
+    rememberSettings()
     syncInputs()
     layout()
   })
@@ -312,6 +338,60 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   el.date.addEventListener('change', onDateTime)
   el.time.addEventListener('change', onDateTime)
   el.pole.addEventListener('click', aimAtPole)
+
+  // --- Export de l'image du cadre ---
+  function captureInfo(): CaptureInfo {
+    const d = parisDayOf(state.start)
+    const f = fov()
+    const arc = state.durationMin * SIDEREAL_DEG_PER_MIN
+    const moon =
+      moonInfo.altitude > 0
+        ? `Lune ${Math.round(moonInfo.fraction * 100)} % à ${fmt1(moonInfo.altitude)}°`
+        : `Lune couchée (${Math.round(moonInfo.fraction * 100)} %)`
+    return {
+      place: state.observer.label,
+      when: `${pad(d.day)}/${pad(d.month)}/${d.year} à ${formatParisTime(state.start)} (heure de Paris)`,
+      settings:
+        `${roundFocal(state.focalMm)} mm plein format, ${state.orientation === 'landscape' ? 'paysage' : 'portrait'} · ` +
+        `champ ${fmt1(f.h)}° × ${fmt1(f.v)}° · pose ${state.durationMin} min (arc ${fmt1(arc)}°) · ` +
+        `visée az ${Math.round(((state.azimuth % 360) + 360) % 360)}°, haut. ${fmt1(state.altitude)}° · ${moon}`,
+      coords: `${state.observer.lat.toFixed(5)}° N, ${state.observer.lon.toFixed(5)}° E`
+    }
+  }
+
+  function captureFileName(): string {
+    const d = parisDayOf(state.start)
+    const t = formatParisTime(state.start).replace(':', '')
+    return `circumpolaire-${d.year}${pad(d.month)}${pad(d.day)}-${t}-${roundFocal(state.focalMm)}mm.png`
+  }
+
+  /** Rendu en haute définition (2 400 px sur le grand côté), puis retour à la taille d'écran. */
+  function renderForExport(): HTMLCanvasElement {
+    const { width: fw, height: fh } = frame()
+    const aspect = fw / fh
+    const w = aspect >= 1 ? EXPORT_LONG_SIDE_PX : Math.round(EXPORT_LONG_SIDE_PX * aspect)
+    const h = aspect >= 1 ? Math.round(EXPORT_LONG_SIDE_PX / aspect) : EXPORT_LONG_SIDE_PX
+    const ratio = window.devicePixelRatio
+    scene.renderer.setPixelRatio(1)
+    scene.setSize(w, h)
+    scene.setPointScale(w / Math.max(1, el.canvas.clientWidth))
+    scene.setView(state.azimuth, state.altitude, fov().v, aspect)
+    scene.render()
+    const capture = composeCapture(el.canvas, captureInfo())
+    scene.renderer.setPixelRatio(ratio)
+    scene.setPointScale(ratio)
+    layout()
+    return capture
+  }
+
+  el.exportButton.addEventListener('click', async () => {
+    try {
+      await saveCapture(renderForExport(), captureFileName())
+    } catch (e) {
+      el.terrain.textContent = `Export impossible : ${(e as Error).message}`
+      el.terrain.dataset.tone = 'error'
+    }
+  })
   el.moon.addEventListener('click', () => {
     // On garde la continuité de l'azimut pour ne pas faire un tour complet.
     let az = moonInfo.azimuth
@@ -476,7 +556,17 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     draw()
     void loadBuildings(false)
   }
-  const miniMap = createMiniMap(el.miniMapBox, el.miniMap, el.miniMapToggle, (lat, lon) => void moveTo(lat, lon))
+  const miniMap = createMiniMap(
+    el.miniMapBox,
+    el.miniMap,
+    el.miniMapToggle,
+    (lat, lon) => void moveTo(lat, lon),
+    state.miniMapCollapsed,
+    (collapsed) => {
+      state.miniMapCollapsed = collapsed
+      rememberSettings()
+    }
+  )
 
   return {
     open(observer, night) {
