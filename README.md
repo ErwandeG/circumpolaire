@@ -39,6 +39,13 @@ src/renderer/src/
 scripts/                  génération du catalogue
 ```
 
+## Licence
+
+Code sous licence [MIT](LICENSE). Données tierces, sous leur propre licence :
+
+- catalogue d'étoiles `src/renderer/src/data/stars.json` : base HYG v4.1, licence CC BY-SA 4.0 ;
+- fond de carte, adresses, LiDAR HD et BD TOPO : IGN, chargés en ligne depuis la Géoplateforme (licence Etalab 2.0).
+
 ## Avancement
 
 - [x] Jalon 1 : socle, carte et lieu

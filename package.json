@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Préparation de photos circumpolaires en ville : calendrier lunaire et vue du ciel à hauteur d'homme.",
   "private": true,
+  "license": "MIT",
   "main": "./out/main/index.js",
   "scripts": {
     "postinstall": "install-electron",
