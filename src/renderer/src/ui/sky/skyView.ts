@@ -32,6 +32,7 @@ import { checkPointInFrance } from '../../services/geocoding'
 import { STAR_COUNT_MIN, STAR_COUNT_STEP, clampEyeHeight, clampReliefDistance } from '../../domain/preferences'
 import { loadPreferences, savePreferences } from '../../services/storage'
 import { loadReliefGrids } from '../../services/reliefService'
+import { describeFetchError } from '../../services/cache'
 import { loadTerrain } from '../../services/terrainService'
 import { computeHorizonAsync } from './horizonClient'
 import { EXPORT_LONG_SIDE_PX, composeCapture, saveCapture, type CaptureInfo } from './exportImage'
@@ -582,6 +583,8 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   let lastGround = Number.NaN
   let loading = false
   let terrainRequest = 0
+  /** Dernier bilan du chargement des bâtiments, réaffiché quand une erreur de relief se résout. */
+  let terrainStatus = ''
 
   /** Place l'œil au point courant, à la hauteur choisie au-dessus du sol de la scène chargée. */
   function placeEye(): void {
@@ -633,7 +636,8 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       showCoords()
       recomputeSky()
     }
-    el.terrain.textContent = parts.join(' · ')
+    terrainStatus = parts.join(' · ')
+    el.terrain.textContent = terrainStatus
     walk = res.walk
     scene.setTerrain(res.mesh, state.radius)
     miniMap.setZone(res.walk.frame.lat0, res.walk.frame.lon0, state.radius)
@@ -645,6 +649,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
 
   // --- Relief lointain : crêtes jusqu'à la distance choisie, au-delà de la scène détaillée ---
   let reliefRequest = 0
+  const RELIEF_ERROR = 'Relief lointain indisponible'
   async function loadRelief(): Promise<void> {
     const id = ++reliefRequest
     if (!state.reliefOn || state.reliefDistance <= state.radius) {
@@ -661,12 +666,14 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       const result = await computeHorizonAsync(grids, lat, lon, state.eyeHeight, state.radius, state.reliefDistance)
       if (id !== reliefRequest) return
       scene.setHorizon(result)
+      // Une erreur de relief précédente n'a plus lieu d'être affichée.
+      if (el.terrain.textContent?.startsWith(RELIEF_ERROR)) {
+        el.terrain.textContent = terrainStatus
+        delete el.terrain.dataset.tone
+      }
     } catch (e) {
       if (id !== reliefRequest) return
-      const offline = e instanceof TypeError || (e instanceof DOMException && e.name === 'AbortError')
-      el.terrain.textContent = offline
-        ? 'Relief lointain indisponible : pas de connexion aux services de l’IGN.'
-        : `Relief lointain indisponible : ${(e as Error).message}`
+      el.terrain.textContent = describeFetchError(e, RELIEF_ERROR)
       el.terrain.dataset.tone = 'error'
     } finally {
       if (id === reliefRequest) setBusy('relief', null)

@@ -12,7 +12,7 @@ import {
   type WalkContext
 } from '../domain/terrain'
 import { localFrame } from '../domain/geo/local'
-import { fetchCached } from './cache'
+import { describeFetchError, fetchCached } from './cache'
 
 const WMS = 'https://data.geopf.fr/wms-r'
 const WFS = 'https://data.geopf.fr/wfs/ows'
@@ -106,12 +106,6 @@ export async function loadTerrain(
       walk: { frame: localFrame(geo.lat, geo.lon), eyeAltitude: mesh.eyeAltitude, mnt, mns, buildings }
     }
   } catch (e) {
-    const offline = e instanceof TypeError || (e instanceof DOMException && e.name === 'AbortError')
-    return {
-      status: 'error',
-      message: offline
-        ? 'Bâtiments indisponibles : pas de connexion aux services de l’IGN.'
-        : `Bâtiments indisponibles : ${(e as Error).message}`
-    }
+    return { status: 'error', message: describeFetchError(e, 'Bâtiments indisponibles') }
   }
 }
