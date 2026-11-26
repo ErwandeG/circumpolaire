@@ -39,6 +39,10 @@ export interface BuildingGeometry {
   positions: number[]
   kinds: number[]
   indices: number[]
+  /** Hauteur de chaque sommet au-dessus du sol (m), pour l'éclairage. */
+  elevations: number[]
+  /** Arêtes à souligner (haut des murs, angles) : paires de points dans le repère de la scène. */
+  lines: number[]
   /** Pixels couverts par des volumes de repli (sans LiDAR). */
   fallbackCells: number
   /** Pixels couverts par les emprises. */
@@ -130,16 +134,28 @@ export function buildBuildingGeometry(
   groundAltitude: (x: number, y: number) => number,
   toScene: ToScene
 ): BuildingGeometry {
-  const out: BuildingGeometry = { positions: [], kinds: [], indices: [], fallbackCells: 0, footprintCells: 0 }
+  const out: BuildingGeometry = {
+    positions: [],
+    kinds: [],
+    indices: [],
+    elevations: [],
+    lines: [],
+    fallbackCells: 0,
+    footprintCells: 0
+  }
   const { cols, rows, res } = mns
   const vx = (c: number) => mns.minX + (c + 0.5) * res
   const vy = (r: number) => mns.maxY - (r + 0.5) * res
 
-  const push = (x: number, y: number, h: number, kind: number): number => {
+  const push = (x: number, y: number, h: number, kind: number, ground = groundAltitude(x, y)): number => {
     const [sx, sy, sz] = toScene(x, y, h)
     out.positions.push(sx, sy, sz)
     out.kinds.push(kind)
+    out.elevations.push(Number.isNaN(ground) ? 0 : Math.max(0, h - ground))
     return out.kinds.length - 1
+  }
+  const line = (x0: number, y0: number, h0: number, x1: number, y1: number, h1: number) => {
+    out.lines.push(...toScene(x0, y0, h0), ...toScene(x1, y1, h1))
   }
 
   touched.forEach((building, k) => {
@@ -366,11 +382,25 @@ export function buildBuildingGeometry(
             const bp = (Number.isNaN(gp) ? tp - 10 : gp) - WALL_FOOTING_M
             const bq = (Number.isNaN(gq) ? tq - 10 : gq) - WALL_FOOTING_M
             if (tp <= bp && tq <= bq) continue
-            const i0 = push(p[0], p[1], bp, kind)
-            const i1 = push(q[0], q[1], bq, kind)
-            const i2 = push(q[0], q[1], tq, kind)
-            const i3 = push(p[0], p[1], tp, kind)
+            const i0 = push(p[0], p[1], bp, kind, gp)
+            const i1 = push(q[0], q[1], bq, kind, gq)
+            const i2 = push(q[0], q[1], tq, kind, gq)
+            const i3 = push(p[0], p[1], tp, kind, gp)
             out.indices.push(i0, i1, i2, i0, i2, i3)
+            // Haut du mur : ligne de toit.
+            line(p[0], p[1], tp, q[0], q[1], tq)
+          }
+          // Angle du bâtiment, s'il est marqué (changement de direction de plus de 20°).
+          const prev = ring[i === 0 ? ring.length - 2 : i - 1]
+          const d1x = ax - prev[0]
+          const d1y = ay - prev[1]
+          const d2x = bx - ax
+          const d2y = by - ay
+          const cos = (d1x * d2x + d1y * d2y) / (Math.hypot(d1x, d1y) * Math.hypot(d2x, d2y) || 1)
+          if (cos < Math.cos((20 * Math.PI) / 180)) {
+            const g = groundAltitude(ax, ay)
+            const top = roofAt(ax, ay)
+            if (!Number.isNaN(g) && top > g) line(ax, ay, g, ax, ay, top)
           }
         }
   })

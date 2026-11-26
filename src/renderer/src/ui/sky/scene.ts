@@ -4,11 +4,14 @@ import { SurfaceKind, type TerrainMesh } from '../../domain/terrain'
 
 /** Couleurs de la surface : sol, bâtiment, végétation, volume BD TOPO de repli. */
 export const SURFACE_COLORS: Record<number, [number, number, number]> = {
-  [SurfaceKind.Ground]: [0.16, 0.18, 0.21],
+  [SurfaceKind.Ground]: [0.14, 0.15, 0.18],
   [SurfaceKind.Building]: [0.42, 0.45, 0.5],
-  [SurfaceKind.Vegetation]: [0.2, 0.33, 0.22],
-  [SurfaceKind.Fallback]: [0.62, 0.4, 0.2]
+  [SurfaceKind.Vegetation]: [0.17, 0.28, 0.19],
+  [SurfaceKind.Fallback]: [0.6, 0.39, 0.2]
 }
+
+/** Halo lumineux de la ville au ras de l'horizon : couleur de la brume. */
+const FOG_COLOR = 0x171d2c
 
 /**
  * Rendu three.js de la vue à hauteur d'homme.
@@ -113,7 +116,7 @@ function textSprite(text: string, color: string, sizePx = 13): THREE.Sprite {
   ctx.fillText(text, 4, canvas.height / 2)
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }))
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tex, depthTest: false, transparent: true }))
   sprite.userData.pixelSize = { w: canvas.width / 2, h: canvas.height / 2 }
   sprite.center.set(0, 0.5)
   sprite.renderOrder = 10
@@ -137,7 +140,7 @@ function ringSprite(color: string, sizePx: number, cross = false): THREE.Sprite 
   }
   ctx.stroke()
   const tex = new THREE.CanvasTexture(canvas)
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }))
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tex, depthTest: false, transparent: true }))
   sprite.userData.pixelSize = { w: sizePx, h: sizePx }
   sprite.renderOrder = 10
   return sprite
@@ -155,7 +158,7 @@ function glowSprite(sizePx: number): THREE.Sprite {
   ctx.fillStyle = g
   ctx.fillRect(0, 0, 64, 64)
   const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({
+    new THREE.SpriteMaterial({ fog: false,
       map: new THREE.CanvasTexture(canvas),
       transparent: true,
       depthWrite: false,
@@ -209,6 +212,8 @@ export class SkyScene {
     this.camera = new THREE.PerspectiveCamera(50, 1.5, 0.1, 50_000)
     this.camera.rotation.order = 'YXZ'
     this.scene.add(this.sky)
+    // L'étiquette de la Lune disparaît avec elle derrière les bâtiments.
+    this.moonLabel.material.depthTest = true
 
     // Sol : disque sombre à 1,70 m sous l'œil.
     const ground = new THREE.Mesh(
@@ -228,7 +233,7 @@ export class SkyScene {
     this.sky.add(
       new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(horizonPts),
-        new THREE.LineBasicMaterial({ color: 0x3b4a63 })
+        new THREE.LineBasicMaterial({ color: 0x3b4a63, fog: false })
       )
     )
     const cardinals: [string, number][] = [
@@ -248,7 +253,7 @@ export class SkyScene {
     // Lune : sphère éclairée par le Soleil, donc phase et orientation exactes.
     this.moonMesh = new THREE.Mesh(
       new THREE.SphereGeometry(1, 48, 32),
-      new THREE.MeshStandardMaterial({ color: 0xe8e4d8, roughness: 1, metalness: 0 })
+      new THREE.MeshStandardMaterial({ color: 0xe8e4d8, roughness: 1, metalness: 0, fog: false })
     )
     this.moonGroup.add(this.moonMesh)
     this.sky.add(this.moonGroup)
@@ -394,20 +399,35 @@ export class SkyScene {
   }
 
   private terrain?: THREE.Mesh
+  private outline?: THREE.LineSegments
 
   /**
    * Surface LiDAR (bâtiments, arbres, relief). Opaque : elle cache étoiles, filés et Lune.
-   * Ombrage calculé à partir des normales, indépendant de l'éclairage (de nuit, le Soleil
-   * ne doit pas éclairer les façades).
+   *
+   * Éclairage de nuit calculé par sommet, indépendant des lumières three.js
+   * (le Soleil, qui éclaire la Lune, ne doit pas éclairer les façades) :
+   * - lumière du ciel nocturne, surtout sur les toits ; façades nuancées selon leur orientation ;
+   * - lueur chaude de l'éclairage public, forte au ras du sol, éteinte vers 10 m ;
+   * - ombres de contact au pied des murs et sur le sol autour des bâtiments ;
+   * - brume de distance (la ville s'estompe dans le halo lumineux) ; arêtes soulignées.
    */
-  setTerrain(mesh: TerrainMesh | null): void {
+  setTerrain(mesh: TerrainMesh | null, radius = 50): void {
     if (this.terrain) {
       this.scene.remove(this.terrain)
       this.terrain.geometry.dispose()
       ;(this.terrain.material as THREE.Material).dispose()
       this.terrain = undefined
     }
-    if (!mesh) return
+    if (this.outline) {
+      this.scene.remove(this.outline)
+      this.outline.geometry.dispose()
+      ;(this.outline.material as THREE.Material).dispose()
+      this.outline = undefined
+    }
+    if (!mesh) {
+      this.scene.fog = null
+      return
+    }
     const geom = new THREE.BufferGeometry()
     geom.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3))
     geom.setIndex(new THREE.BufferAttribute(mesh.indices, 1))
@@ -416,22 +436,56 @@ export class SkyScene {
     const colors = new Float32Array(mesh.kinds.length * 3)
     const tmp = new THREE.Color()
     for (let i = 0; i < mesh.kinds.length; i++) {
-      const [r, g, b] = SURFACE_COLORS[mesh.kinds[i]] ?? SURFACE_COLORS[SurfaceKind.Ground]
-      // Toits clairs, façades plus ou moins sombres selon leur orientation.
-      const nx = normals.getX(i)
-      const ny = normals.getY(i)
-      const nz = normals.getZ(i)
-      const shade = 0.45 + 0.4 * Math.max(0, ny) + 0.15 * Math.max(0, -nx * 0.6 - nz * 0.8)
-      // Couleurs pensées en sRGB, converties dans l'espace linéaire de three.js.
-      tmp.setRGB(r * shade, g * shade, b * shade, THREE.SRGBColorSpace)
+      const kind = mesh.kinds[i]
+      const [r, g, b] = SURFACE_COLORS[kind] ?? SURFACE_COLORS[SurfaceKind.Ground]
+      // Les faces n'ont pas toutes le même sens : on raisonne sur la valeur absolue des normales.
+      const ny = Math.abs(normals.getY(i))
+      const nx = Math.abs(normals.getX(i))
+      const elev = mesh.elevation[i]
+      const isBuilding = kind === SurfaceKind.Building || kind === SurfaceKind.Fallback
+      // Ciel nocturne : toits nettement plus clairs, façades est/ouest un peu plus que nord/sud.
+      const sky = 0.46 + 0.36 * ny + 0.16 * nx * (1 - ny)
+      // Éclairage public : lueur chaude près du sol, surtout sur les façades.
+      const glow = 0.62 * Math.exp(-elev / 7) * (1 - 0.55 * ny)
+      // Ombre de contact : pied des murs, et sol autour des bâtiments.
+      const contact = (isBuilding ? 0.6 + 0.4 * Math.min(1, elev / 3) : 1) * mesh.contact[i]
+      tmp.setRGB(
+        (r * sky + glow * 0.34) * contact,
+        (g * sky + glow * 0.22) * contact,
+        (b * sky + glow * 0.12) * contact,
+        THREE.SRGBColorSpace
+      )
       colors[i * 3] = tmp.r
       colors[i * 3 + 1] = tmp.g
       colors[i * 3 + 2] = tmp.b
     }
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    this.terrain = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }))
+    this.terrain = new THREE.Mesh(
+      geom,
+      new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        side: THREE.DoubleSide,
+        // Faces légèrement repoussées : le liseré des arêtes passe devant sans scintiller.
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1
+      })
+    )
     this.terrain.renderOrder = -1
     this.scene.add(this.terrain)
+
+    if (mesh.outline.length > 0) {
+      const lg = new THREE.BufferGeometry()
+      lg.setAttribute('position', new THREE.BufferAttribute(mesh.outline, 3))
+      this.outline = new THREE.LineSegments(
+        lg,
+        new THREE.LineBasicMaterial({ color: 0xb8c4d6, transparent: true, opacity: 0.3 })
+      )
+      this.scene.add(this.outline)
+    }
+
+    // Brume : plus le rayon est grand, plus elle est légère (≈ 35 % à la limite du cercle).
+    this.scene.fog = new THREE.FogExp2(FOG_COLOR, 0.45 / (radius + 80))
   }
 
   /** Oriente la caméra : azimut et hauteur du centre du cadre, champ vertical, rapport largeur/hauteur. */

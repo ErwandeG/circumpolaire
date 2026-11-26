@@ -97,6 +97,30 @@ describe('reconstruction des bâtiments', () => {
     expect(roofOverCourt).toHaveLength(0)
   })
 
+  it('fournit hauteurs au-dessus du sol et arêtes pour l’éclairage', () => {
+    const mns = grid((x, y) => (inHouse(x, y) ? 160 : 140))
+    const t = buildTerrain(obs, mns, mnt, [house], 50)
+    expect(t.elevation).toHaveLength(t.kinds.length)
+    // Sommets du bâtiment : 0 au pied, 20 m au toit.
+    let maxElev = 0
+    for (let i = 0; i < t.kinds.length; i++) if (t.kinds[i] === SurfaceKind.Building) maxElev = Math.max(maxElev, t.elevation[i])
+    expect(maxElev).toBeCloseTo(20, 3)
+    // Arêtes : le tour du toit (≈ 40 m de contour) et 4 angles verticaux de 20 m.
+    let roofLine = 0
+    let vertical = 0
+    for (let i = 0; i < t.outline.length; i += 6) {
+      const dx = t.outline[i + 3] - t.outline[i]
+      const dy = t.outline[i + 4] - t.outline[i + 1]
+      const dz = t.outline[i + 5] - t.outline[i + 2]
+      if (Math.abs(dy) > 10) vertical++
+      else roofLine += Math.hypot(dx, dz)
+    }
+    expect(vertical).toBe(4)
+    expect(roofLine).toBeCloseTo(2 * (12.3 + 7.7), 0)
+    // Ombre de contact sur le sol au pied de l'immeuble.
+    expect(Array.from(t.contact).some((c) => c < 1)).toBe(true)
+  })
+
   it('construit un volume de repli plat quand le LiDAR manque', () => {
     const mns = grid((x, y) => (inHouse(x, y) ? Number.NaN : 140))
     const t = buildTerrain(obs, mns, mnt, [house], 50)

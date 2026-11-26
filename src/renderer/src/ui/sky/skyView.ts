@@ -493,7 +493,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     }
     el.terrain.textContent = parts.join(' · ')
     walk = res.walk
-    scene.setTerrain(res.mesh)
+    scene.setTerrain(res.mesh, state.radius)
     miniMap.setZone(res.walk.frame.lat0, res.walk.frame.lon0, state.radius)
     placeEye()
     draw()

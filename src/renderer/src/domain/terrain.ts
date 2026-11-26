@@ -115,6 +115,12 @@ export interface TerrainMesh {
   positions: Float32Array
   kinds: Uint8Array
   indices: Uint32Array
+  /** Hauteur de chaque sommet au-dessus du sol (m) : lueur de l'éclairage public, ombres de contact. */
+  elevation: Float32Array
+  /** Assombrissement par sommet (1 = aucun) : sol au pied des bâtiments. */
+  contact: Float32Array
+  /** Arêtes des bâtiments à souligner : paires de points (x, y, z). */
+  outline: Float32Array
   /** Part de la zone sans LiDAR, couverte par BD TOPO (0 à 1). */
   fallbackShare: number
   eyeAltitude: number
@@ -232,11 +238,21 @@ export function buildTerrain(
   allIndices.set(ground.indices)
   for (let i = 0; i < bld.indices.length; i++) allIndices[ground.indices.length + i] = bld.indices[i] + nGround
 
+  const elevation = new Float32Array(nGround + bld.kinds.length)
+  elevation.set(ground.elevation)
+  elevation.set(bld.elevations, nGround)
+  // Ombre de contact : le sol s'assombrit au pied des bâtiments.
+  const contact = new Float32Array(nGround + bld.kinds.length).fill(1)
+  for (let i = 0; i < cols * rows; i++) if (nearBuilding[i]) contact[i] = 0.72
+
   const total = maskedCells + bld.footprintCells
   return {
     positions: allPositions,
     kinds: allKinds,
     indices: allIndices,
+    elevation,
+    contact,
+    outline: Float32Array.from(bld.lines),
     fallbackShare: total ? (fallbackCells + bld.fallbackCells) / total : 0,
     eyeAltitude
   }
@@ -318,13 +334,17 @@ function assembleMesh(
   positions.set(top)
   const outKinds = new Uint8Array(count)
   outKinds.set(kinds)
+  const elevation = new Float32Array(count)
+  for (let i = 0; i < n; i++) elevation[i] = Math.max(0, top[i * 3 + 1] - groundRel[i])
   for (let i = 0; i < n; i++) {
     const j = extra[i]
     if (j < 0) continue
     const x = top[i * 3]
     const z = top[i * 3 + 2]
-    positions.set([x, crownBottom(groundRel[i], top[i * 3 + 1]), z], j * 3)
+    const bottom = crownBottom(groundRel[i], top[i * 3 + 1])
+    positions.set([x, bottom, z], j * 3)
     outKinds[j] = SurfaceKind.Vegetation
+    elevation[j] = bottom - groundRel[i]
     positions.set([x, groundRel[i], z], (j + 1) * 3)
     outKinds[j + 1] = SurfaceKind.Ground
   }
@@ -367,6 +387,9 @@ function assembleMesh(
     positions,
     kinds: outKinds,
     indices: Uint32Array.from(idx),
+    elevation,
+    contact: new Float32Array(count).fill(1),
+    outline: new Float32Array(0),
     fallbackShare: maskedCells ? fallbackCells / maskedCells : 0,
     eyeAltitude
   }
