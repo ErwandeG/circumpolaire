@@ -79,6 +79,40 @@ describe('checkPointInFrance', () => {
     expect(called).toBe(false)
   })
 
+  // Réponses réelles du service : en montagne, pas d'adresse ; on se rabat sur les toponymes.
+  const byIndex = (poi: unknown) => async (url: string) =>
+    new Response(JSON.stringify(url.includes('index=poi') ? poi : { type: 'FeatureCollection', features: [] }))
+  const poiFeature = (props: Record<string, unknown>, lon: number, lat: number) => ({
+    type: 'FeatureCollection',
+    features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: props }]
+  })
+
+  it('accepte un sommet sans adresse proche (Petit Ballon, Vosges)', async () => {
+    const poi = poiFeature(
+      { toponym: 'Wasserbourg', citycode: ['68358'], depcode: ['68'], territory: 'METROPOLE' },
+      7.15778,
+      47.99694
+    )
+    const r = await checkPointInFrance(47.985, 7.1356, byIndex(poi))
+    expect(r).toEqual({ status: 'inside', label: 'Wasserbourg' })
+  })
+
+  it('accepte les pistes des Deux Alpes', async () => {
+    const poi = poiFeature(
+      { toponym: 'Ruisseau du Grand Plan', citycode: ['38253'], city: ['Les Deux Alpes'], territory: 'METROPOLE' },
+      6.159969,
+      45.006527
+    )
+    const r = await checkPointInFrance(45.01, 6.15, byIndex(poi))
+    expect(r).toEqual({ status: 'inside', label: 'Ruisseau du Grand Plan, Les Deux Alpes' })
+  })
+
+  it('refuse Lausanne malgré le Léman, lieu sans commune et trop loin', async () => {
+    const poi = poiFeature({ toponym: 'le Léman', territory: 'METROPOLE' }, 6.533441, 46.394188)
+    const r = await checkPointInFrance(46.5, 6.6, byIndex(poi))
+    expect(r.status).toBe('outside')
+  })
+
   it('laisse passer sans vérification si le service est injoignable', async () => {
     const r = await checkPointInFrance(48.58, 7.75, async () => {
       throw new TypeError('offline')

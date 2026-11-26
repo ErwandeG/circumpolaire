@@ -70,21 +70,55 @@ function distanceM(lat1: number, lon1: number, lat2: number, lon2: number): numb
   return 2 * R * Math.asin(Math.sqrt(a))
 }
 
+const firstString = (v: unknown): string | undefined =>
+  typeof v === 'string' ? v : Array.isArray(v) && typeof v[0] === 'string' ? v[0] : undefined
+
+/**
+ * Lieu nommé français le plus proche (commune, sommet, cours d'eau, lieu-dit…), à moins de 5 km.
+ * Seuls les lieux de métropole rattachés à une commune comptent : le Léman, sans commune, ne
+ * suffit pas à rendre Lausanne française.
+ */
+export function parseReversePoi(body: unknown, lat: number, lon: number): { label: string } | null {
+  const features = (body as { features?: unknown } | null)?.features
+  if (!Array.isArray(features)) return null
+  for (const f of features) {
+    const coords = f?.geometry?.coordinates
+    const p = f?.properties
+    if (!Array.isArray(coords) || typeof p !== 'object' || p === null) continue
+    const [plon, plat] = coords
+    if (typeof plat !== 'number' || typeof plon !== 'number') continue
+    if (p.territory !== 'METROPOLE' || !firstString(p.citycode)) continue
+    if (distanceM(lat, lon, plat, plon) > MAX_REVERSE_DISTANCE_M) continue
+    const name = firstString(p.toponym) ?? firstString(p.name)
+    const city = firstString(p.city)
+    const label = name && city && city !== name ? `${name}, ${city}` : (name ?? city)
+    if (label) return { label }
+  }
+  return null
+}
+
 /**
  * Vérifie qu'un point cliqué est en France métropolitaine : rectangle de la métropole,
  * puis adresse française la plus proche à moins de 5 km (géocodage inverse IGN).
+ * En montagne ou en forêt, aucune adresse n'est assez proche : on cherche alors un lieu nommé
+ * (commune, sommet, ruisseau…) de la base des toponymes de l'IGN.
  */
 export async function checkPointInFrance(lat: number, lon: number, fetchFn: FetchFn = fetch): Promise<PointCheck> {
   if (!isInMetropolitanBounds(lat, lon)) return { status: 'outside' }
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const base = `${REVERSE_ENDPOINT}?lat=${lat}&lon=${lon}&limit=1`
   try {
-    const res = await fetchFn(`${REVERSE_ENDPOINT}?lat=${lat}&lon=${lon}&limit=1`, { signal: controller.signal })
+    const res = await fetchFn(base, { signal: controller.signal })
     if (!res.ok) return { status: 'unverified' }
     const [place] = parseGeocodeResponse(await res.json())
-    if (!place) return { status: 'outside' }
-    if (distanceM(lat, lon, place.lat, place.lon) > MAX_REVERSE_DISTANCE_M) return { status: 'outside' }
-    return { status: 'inside', label: place.label }
+    if (place && distanceM(lat, lon, place.lat, place.lon) <= MAX_REVERSE_DISTANCE_M) {
+      return { status: 'inside', label: place.label }
+    }
+    const poiRes = await fetchFn(`${base}&index=poi`, { signal: controller.signal })
+    if (!poiRes.ok) return { status: 'unverified' }
+    const poi = parseReversePoi(await poiRes.json(), lat, lon)
+    return poi ? { status: 'inside', label: poi.label } : { status: 'outside' }
   } catch {
     return { status: 'unverified' }
   } finally {
