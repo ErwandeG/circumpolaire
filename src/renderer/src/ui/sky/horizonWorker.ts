@@ -10,6 +10,8 @@ self.onmessage = (e: MessageEvent<{ id: number; params: HorizonParams }>) => {
     profile.skyline.buffer,
     profile.skylineDistance.buffer,
     profile.ridges.buffer,
+    profile.layers.buffer,
+    profile.layerStart.buffer,
     segments.buffer
   ])
 }

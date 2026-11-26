@@ -67,6 +67,54 @@ describe('relief lointain', () => {
     expect(seg.length).toBeGreaterThan(5 * 5)
   })
 
+  it('empile les plans vus sous la crête, du proche au lointain', () => {
+    const g = grid((_x, y) => {
+      if (y > 1800 && y < 2200) return 1300
+      if (y > 9800 && y < 10500) return 3000
+      return 1000
+    })
+    const p = computeHorizon({ ...base, grids: [g] })
+    const from = p.layerStart[0]
+    const to = p.layerStart[1]
+    expect(to - from).toBeGreaterThan(1)
+    // Bandes jointives de −30° jusqu'à la crête, distances croissantes.
+    expect(p.layers[from * 3]).toBe(-30)
+    for (let k = from + 1; k < to; k++) {
+      expect(p.layers[k * 3]).toBeCloseTo(p.layers[(k - 1) * 3 + 1], 5)
+      expect(p.layers[k * 3 + 2]).toBeGreaterThan(p.layers[(k - 1) * 3 + 2])
+    }
+    expect(p.layers[(to - 1) * 3 + 1]).toBeCloseTo(p.skyline[0], 5)
+    expect(p.layers[(to - 1) * 3 + 2]).toBeGreaterThan(9500)
+  })
+
+  it('dessine la ville en silhouette (MNS) mais cherche les crêtes sur le sol nu', () => {
+    // Tour de 300 m à 800 m au nord (MNS seulement), plus haute à l'œil que la crête à 10 km.
+    const bare = grid((_x, y) => {
+      if (y > 1800 && y < 2200) return 1300
+      if (y > 9800 && y < 10500) return 3000
+      return 1000
+    })
+    const surf: ReliefGrid = { ...grid((x, y) => (Math.abs(x) < 60 && y > 760 && y < 840 ? 1300 : 1000)), surface: true }
+    // Grille MNS limitée à 3 km : au-delà, NaN, le MNT prend le relais.
+    surf.values = surf.values.map((v, i) => {
+      const c = i % surf.cols
+      const r = Math.floor(i / surf.cols)
+      const x = surf.minX + (c + 0.5) * surf.res
+      const y = surf.maxY - (r + 0.5) * surf.res
+      return Math.hypot(x, y) < 3000 ? v : Number.NaN
+    })
+    const p = computeHorizon({ ...base, grids: [surf, bare] })
+    // La tour cache le nord : la silhouette est la sienne, à 800 m.
+    expect(p.skyline[0]).toBeGreaterThan(atan(300 - 1.7, 850))
+    expect(p.skylineDistance[0]).toBeLessThan(900)
+    // Aucune crête « de toit » : la tour n'est pas dans les crêtes.
+    for (let k = 0; k < p.ridges.length; k += 3) expect(p.ridges[k + 2]).toBeGreaterThan(1500)
+    // Ailleurs, la colline de 2 km reste une crête.
+    const east = []
+    for (let k = 0; k < p.ridges.length; k += 3) if (p.ridges[k] === 10) east.push(p.ridges[k + 2])
+    expect(east.some((d) => d > 1700 && d < 2300)).toBe(true)
+  })
+
   it('ne dépasse pas la distance demandée', () => {
     const g = grid((_x, y) => (y > 9000 && y < 10000 ? 4000 : 1000))
     const p = computeHorizon({ ...base, grids: [g], maxDistance: 5000 })

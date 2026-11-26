@@ -18,6 +18,35 @@ const RINGS = [
   { half: 201000, res: 500 }
 ] as const
 
+/** MNS LiDAR HD : la surface vue d'avion, bâtiments et arbres compris. */
+const SURFACE_LAYER = 'IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93'
+
+/**
+ * Ceinture urbaine : au-delà des volumes 3D et jusqu'à 3 km, la silhouette des toits, clochers
+ * et arbres. Pas de 2 m puis 5 m : assez fin pour garder les flèches.
+ */
+export const URBAN_BELT = [
+  { half: 1500, res: 2 },
+  { half: 3000, res: 5 }
+] as const
+export const URBAN_BELT_M = URBAN_BELT[URBAN_BELT.length - 1].half
+
+async function fetchSurfaceRing(cx: number, cy: number, half: number, res: number): Promise<ReliefGrid | null> {
+  const snap = res * 10
+  const x0 = Math.round(cx / snap) * snap
+  const y0 = Math.round(cy / snap) * snap
+  const cols = Math.round((2 * half) / res)
+  try {
+    const values = await fetchRaw(SURFACE_LAYER, x0 - half, y0 - half, x0 + half, y0 + half, cols, cols)
+    // Hors couverture LiDAR HD (étranger, zones pas encore relevées) : le MNT prend le relais.
+    if (values.every(Number.isNaN)) return null
+    return { minX: x0 - half, maxY: y0 + half, res, cols, rows: cols, values, surface: true }
+  } catch {
+    // La silhouette de la ville est un plus : son absence ne doit pas priver du relief.
+    return null
+  }
+}
+
 async function fetchRaw(layer: string, minX: number, minY: number, maxX: number, maxY: number, cols: number, rows: number) {
   const url =
     `${WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLES=` +
@@ -50,9 +79,17 @@ async function fetchRing(cx: number, cy: number, half: number, res: number): Pro
   return { minX, maxY, res, cols, rows, values }
 }
 
-/** Grilles de relief nécessaires pour voir jusqu'à `distance` mètres, de la plus fine à la plus grossière. */
+/**
+ * Grilles de relief nécessaires pour voir jusqu'à `distance` mètres, de la plus fine à la plus grossière :
+ * d'abord la ceinture urbaine (MNS), puis les anneaux de sol nu (MNT).
+ */
 export async function loadReliefGrids(lat: number, lon: number, distance: number): Promise<ReliefGrid[]> {
   const p = toLambert93(lat, lon)
   const needed = RINGS.filter((_ring, i) => i === 0 || distance > RINGS[i - 1].half)
-  return Promise.all(needed.map((r) => fetchRing(p.x, p.y, r.half, r.res)))
+  const belt = URBAN_BELT.filter((_ring, i) => i === 0 || distance > URBAN_BELT[i - 1].half)
+  const [surface, bare] = await Promise.all([
+    Promise.all(belt.map((r) => fetchSurfaceRing(p.x, p.y, r.half, r.res))),
+    Promise.all(needed.map((r) => fetchRing(p.x, p.y, r.half, r.res)))
+  ])
+  return [...surface.filter((g): g is ReliefGrid => g !== null), ...bare]
 }

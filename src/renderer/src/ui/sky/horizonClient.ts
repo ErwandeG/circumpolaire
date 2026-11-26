@@ -14,6 +14,8 @@ export interface HorizonResult {
   /** Crêtes intermédiaires reliées : [direction1, angle1, direction2, angle2, distance] à la suite. */
   segments: Float32Array
   maxDistance: number
+  /** Portée de la silhouette de la ville (MNS) ; 0 si elle n'a pas pu être chargée. */
+  urbanDistance: number
 }
 
 let worker: Worker | null = null
@@ -73,14 +75,16 @@ export function computeHorizonAsync(
   const n = fromLocal(localFrame(lat, lon), 0, 1000)
   const pn = toLambert93(n.lat, n.lon)
   const gridNorth = Math.atan2(pn.x - p.x, pn.y - p.y)
-  const ground = reliefAt(grids, p.x, p.y).h
+  // Altitude du sol nu : sur le MNS, l'œil serait posé sur un toit ou un arbre voisin.
+  const ground = reliefAt(grids, p.x, p.y, false).h
   const eyeAltitude = (Number.isNaN(ground) ? 0 : ground) + eyeHeight
   const params: HorizonParams = { grids, x: p.x, y: p.y, eyeAltitude, gridNorth, minDistance, maxDistance, azimuths: 3600 }
+  const urbanDistance = Math.max(0, ...grids.filter((g) => g.surface).map((g) => (g.cols * g.res) / 2))
   const w = getWorker()
-  if (!w) return Promise.resolve({ ...computeInline(params), maxDistance })
+  if (!w) return Promise.resolve({ ...computeInline(params), maxDistance, urbanDistance })
   const id = ++nextId
   return new Promise((resolve) => {
-    pending.set(id, { resolve: (r) => resolve({ ...r, maxDistance }), params })
+    pending.set(id, { resolve: (r) => resolve({ ...r, maxDistance, urbanDistance }), params })
     w.postMessage({ id, params })
   })
 }

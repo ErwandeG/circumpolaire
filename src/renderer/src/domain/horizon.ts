@@ -14,6 +14,11 @@ export interface ReliefGrid {
   rows: number
   /** Altitudes (m), NaN = pas de donnée. */
   values: Float32Array
+  /**
+   * Modèle de surface (MNS : bâtiments et arbres compris) plutôt que sol nu (MNT).
+   * Sert à la silhouette de la ville ; les crêtes et l'altitude de l'œil se lisent sur le sol nu.
+   */
+  surface?: boolean
 }
 
 export interface HorizonParams {
@@ -40,7 +45,19 @@ export interface HorizonProfile {
   skylineDistance: Float32Array
   /** Crêtes intermédiaires : [direction, hauteur angulaire (°), distance (m)] à la suite. */
   ridges: Float32Array
+  /**
+   * Ce que l'on voit sous la crête, direction par direction : bandes [hauteur basse (°),
+   * hauteur haute (°), distance (m)] de bas en haut. Sert à éclaircir les plans lointains.
+   */
+  layers: Float32Array
+  /** Début des bandes de chaque direction dans `layers` (en bandes) ; n + 1 valeurs. */
+  layerStart: Uint32Array
 }
+
+/** Bas des bandes : sous l'horizon, ce que l'on voit est le sol proche. */
+const LAYER_FLOOR_DEG = -30
+/** Deux points du terrain vu sont dans la même bande si leurs distances diffèrent de moins de 30 %. */
+const LAYER_BIN = Math.log(1.3)
 
 const EARTH_RADIUS_M = 6_371_000
 /** Coefficient de réfraction terrestre usuel : la lumière suit une courbe qui « relève » l'horizon. */
@@ -73,13 +90,22 @@ function sampleGrid(g: ReliefGrid, x: number, y: number): number {
   return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty
 }
 
-/** Altitude en un point : la grille la plus fine qui a une valeur. */
-export function reliefAt(grids: readonly ReliefGrid[], x: number, y: number): { h: number; res: number } {
+/**
+ * Altitude en un point : la grille la plus fine qui a une valeur.
+ * withSurface = false : sol nu seulement (les grilles MNS sont ignorées).
+ */
+export function reliefAt(
+  grids: readonly ReliefGrid[],
+  x: number,
+  y: number,
+  withSurface = true
+): { h: number; res: number; surface: boolean } {
   for (const g of grids) {
+    if (g.surface && !withSurface) continue
     const h = sampleGrid(g, x, y)
-    if (!Number.isNaN(h)) return { h, res: g.res }
+    if (!Number.isNaN(h)) return { h, res: g.res, surface: g.surface === true }
   }
-  return { h: Number.NaN, res: grids.at(-1)?.res ?? 50 }
+  return { h: Number.NaN, res: grids.at(-1)?.res ?? 50, surface: false }
 }
 
 export function computeHorizon(p: HorizonParams): HorizonProfile {
@@ -87,13 +113,19 @@ export function computeHorizon(p: HorizonParams): HorizonProfile {
   const skyline = new Float32Array(n).fill(Number.NaN)
   const skylineDistance = new Float32Array(n).fill(Number.NaN)
   const ridges: number[] = []
+  const layers: number[] = []
+  const layerStart = new Uint32Array(n + 1)
+  const angleAt = (h: number, d: number) => Math.atan2(h - curvatureDrop(d) - p.eyeAltitude, d) / DEG
 
   for (let i = 0; i < n; i++) {
+    layerStart[i] = layers.length / 3
     const az = (i / n) * 2 * Math.PI + p.gridNorth
     const dx = Math.sin(az)
     const dy = Math.cos(az)
+    // best : crête de la surface vue (bâtiments compris) ; les crêtes se cherchent sur le sol nu.
     let best = -Infinity
     let bestD = Number.NaN
+    let bestBefore = -Infinity
     let prev = -Infinity
     let prevD = 0
     let rising = false
@@ -101,16 +133,47 @@ export function computeHorizon(p: HorizonParams): HorizonProfile {
     let cand: { ang: number; d: number } | null = null
     let dipMin = Infinity
     const rayRidges: { ang: number; d: number }[] = []
+    // Bande en cours de ce que l'on voit : de `lo` à `hi`, à la distance `ld`.
+    let lo = LAYER_FLOOR_DEG
+    let hi = Number.NaN
+    let ld = 0
+    let bin = Number.NaN
 
     let d = p.minDistance
     while (d <= p.maxDistance) {
-      const { h, res } = reliefAt(p.grids, p.x + dx * d, p.y + dy * d)
-      // Pas qui grandit avec la distance : ~1 700 échantillons par direction jusqu'à 200 km.
-      const step = Math.max(res * 0.8, d * 0.004)
-      if (!Number.isNaN(h)) {
-        const ang = Math.atan2(h - curvatureDrop(d) - p.eyeAltitude, d) / DEG
+      const x = p.x + dx * d
+      const y = p.y + dy * d
+      const top = reliefAt(p.grids, x, y)
+      // Dans la ville (MNS), pas fin : une flèche de clocher ne fait que quelques mètres.
+      // Ailleurs, pas qui grandit avec la distance : ~1 700 échantillons par direction jusqu'à 200 km.
+      const step = top.surface ? top.res : Math.max(top.res * 0.8, d * 0.004)
+      if (!Number.isNaN(top.h)) {
+        const surfAng = angleAt(top.h, d)
+        bestBefore = best
+        if (surfAng > best) {
+          // Un nouveau morceau de terrain apparaît au-dessus de ce que l'on voyait déjà.
+          const b = Math.floor(Math.log(Math.max(1, d)) / LAYER_BIN)
+          if (b === bin) {
+            hi = surfAng
+          } else {
+            if (!Number.isNaN(hi)) layers.push(lo, hi, ld)
+            lo = Number.isFinite(best) ? best : LAYER_FLOOR_DEG
+            hi = surfAng
+            ld = d
+            bin = b
+          }
+          best = surfAng
+          bestD = d
+        }
+        const bare = top.surface ? reliefAt(p.grids, x, y, false).h : top.h
+        if (Number.isNaN(bare)) {
+          d += step
+          continue
+        }
+        const ang = angleAt(bare, d)
         if (cand) dipMin = Math.min(dipMin, ang)
-        if (ang < prev && rising && prev >= best - 1e-9) {
+        // Sommet du sol nu, visible s'il dépasse tout ce qui est devant (bâtiments compris).
+        if (ang < prev && rising && prev >= bestBefore - 1e-9) {
           // On vient de passer un sommet visible : il devient candidat.
           if (cand && cand.ang - dipMin >= RIDGE_DIP_DEG) rayRidges.push(cand)
           cand = { ang: prev, d: prevD }
@@ -123,15 +186,12 @@ export function computeHorizon(p: HorizonParams): HorizonProfile {
           dipMin = Infinity
         }
         rising = ang >= prev
-        if (ang > best) {
-          best = ang
-          bestD = d
-        }
         prev = ang
         prevD = d
       }
       d += step
     }
+    if (!Number.isNaN(hi)) layers.push(lo, hi, ld)
     if (best > -Infinity) {
       skyline[i] = best
       skylineDistance[i] = bestD
@@ -140,7 +200,15 @@ export function computeHorizon(p: HorizonParams): HorizonProfile {
     const kept = rayRidges.filter((r) => Math.abs(r.d - bestD) > Math.max(50, bestD * 0.02))
     for (const r of kept.slice(-MAX_RIDGES_PER_RAY)) ridges.push(i, r.ang, r.d)
   }
-  return { azimuths: n, skyline, skylineDistance, ridges: Float32Array.from(ridges) }
+  layerStart[n] = layers.length / 3
+  return {
+    azimuths: n,
+    skyline,
+    skylineDistance,
+    ridges: Float32Array.from(ridges),
+    layers: Float32Array.from(layers),
+    layerStart
+  }
 }
 
 /**

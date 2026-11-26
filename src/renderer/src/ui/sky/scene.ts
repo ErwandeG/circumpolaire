@@ -11,11 +11,51 @@ export const SURFACE_COLORS: Record<number, [number, number, number]> = {
   [SurfaceKind.Fallback]: [0.6, 0.39, 0.2]
 }
 
-/** Halo lumineux de la ville au ras de l'horizon : couleur de la brume. */
-const FOG_COLOR = 0x171d2c
+/**
+ * Palette de nuit commune aux volumes 3D et au relief, en sRGB (0–1) :
+ * - SILHOUETTE : ce qui est proche et non éclairé, plus sombre que le ciel ;
+ * - HAZE : un plan très lointain, presque fondu dans la lueur du ciel à l'horizon ;
+ * - SKY_ZENITH / SKY_HORIZON : le ciel, éclairci au ras de l'horizon par la lueur des villes.
+ * Les volumes 3D s'éteignent vers SILHOUETTE au bord de leur cercle ; le relief part de
+ * SILHOUETTE et s'éclaircit vers HAZE avec la distance (perspective atmosphérique).
+ */
+const SILHOUETTE: [number, number, number] = [0.02, 0.027, 0.047]
+const HAZE: [number, number, number] = [0.075, 0.095, 0.15]
+const SKY_ZENITH: [number, number, number] = [0.024, 0.043, 0.094]
+const SKY_HORIZON: [number, number, number] = [0.085, 0.105, 0.16]
+const hexOf = (c: [number, number, number]) =>
+  (Math.round(c[0] * 255) << 16) | (Math.round(c[1] * 255) << 8) | Math.round(c[2] * 255)
+/** Arêtes des volumes et liseré de la ville lointaine : même trait. */
+const OUTLINE_RGB: [number, number, number] = [0xb8 / 255, 0xc4 / 255, 0xd6 / 255]
+const OUTLINE_ALPHA = 0.3
+
+/** Plan du relief à la distance d (m) : de la silhouette proche vers la brume lointaine. */
+export function depthColor(d: number): [number, number, number] {
+  // ≈ 8 % à 1 km, 30 % à 5 km, 60 % à 15 km, presque fondu au-delà de 50 km.
+  const t = 0.94 * (1 - Math.exp(-Math.max(0, d) / 14_000))
+  return [0, 1, 2].map((k) => SILHOUETTE[k] + (HAZE[k] - SILHOUETTE[k]) * t) as [number, number, number]
+}
 
 /** Relief lointain : distance de dessin (devant les étoiles, à 5 000). */
 const RELIEF_RADIUS = 4000
+
+const skyVertex = /* glsl */ `
+  varying float vUp;
+  void main() {
+    vUp = normalize(position).y;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+const skyFragment = /* glsl */ `
+  uniform vec3 zenith;
+  uniform vec3 horizon;
+  varying float vUp;
+  void main() {
+    // Lueur des villes : forte au ras de l'horizon, éteinte vers 20° de hauteur.
+    float t = smoothstep(-0.02, 0.34, vUp);
+    gl_FragColor = vec4(mix(horizon, zenith, t), 1.0);
+  }
+`
 const reliefVertex = /* glsl */ `
   attribute vec4 rgba;
   varying vec4 vRgba;
@@ -231,17 +271,35 @@ export class SkyScene {
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true })
     this.renderer.setPixelRatio(window.devicePixelRatio)
-    this.scene.background = new THREE.Color(0x060b18)
+    this.scene.background = new THREE.Color(hexOf(SKY_ZENITH))
     this.camera = new THREE.PerspectiveCamera(50, 1.5, 0.1, 50_000)
     this.camera.rotation.order = 'YXZ'
     this.scene.add(this.sky)
     // L'étiquette de la Lune disparaît avec elle derrière les bâtiments.
     this.moonLabel.material.depthTest = true
 
-    // Sol : disque sombre à 1,70 m sous l'œil.
+    // Fond du ciel : dégradé vers la lueur de l'horizon, derrière les étoiles et le relief.
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(4900, 48, 24),
+      new THREE.ShaderMaterial({
+        vertexShader: skyVertex,
+        fragmentShader: skyFragment,
+        uniforms: {
+          zenith: { value: new THREE.Vector3(...SKY_ZENITH) },
+          horizon: { value: new THREE.Vector3(...SKY_HORIZON) }
+        },
+        side: THREE.BackSide,
+        depthWrite: false
+      })
+    )
+    dome.renderOrder = -10
+    dome.frustumCulled = false
+    this.sky.add(dome)
+
+    // Sol : disque sombre à 1,70 m sous l'œil, de la couleur des silhouettes.
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(20_000, 96),
-      new THREE.MeshBasicMaterial({ color: 0x0d1117 })
+      new THREE.MeshBasicMaterial({ color: hexOf(SILHOUETTE) })
     )
     ground.rotation.x = -Math.PI / 2
     ground.position.y = -EYE_HEIGHT_M
@@ -459,6 +517,8 @@ export class SkyScene {
     const normals = geom.getAttribute('normal')
     const colors = new Float32Array(mesh.kinds.length * 3)
     const tmp = new THREE.Color()
+    // Fondu sur les derniers 40 % du rayon, 150 m au plus.
+    const fadeStart = Math.max(radius * 0.6, radius - 150)
     for (let i = 0; i < mesh.kinds.length; i++) {
       const kind = mesh.kinds[i]
       const [r, g, b] = SURFACE_COLORS[kind] ?? SURFACE_COLORS[SurfaceKind.Ground]
@@ -473,10 +533,15 @@ export class SkyScene {
       const glow = 0.62 * Math.exp(-elev / 7) * (1 - 0.55 * ny)
       // Ombre de contact : pied des murs, et sol autour des bâtiments.
       const contact = (isBuilding ? 0.6 + 0.4 * Math.min(1, elev / 3) : 1) * mesh.contact[i]
+      // Bord du cercle : les lumières s'éteignent, la ville devient silhouette comme le relief derrière.
+      const dist = Math.hypot(mesh.positions[i * 3], mesh.positions[i * 3 + 2])
+      const s = Math.min(1, Math.max(0, (dist - fadeStart) / (radius - fadeStart)))
+      const fade = s * s * (3 - 2 * s)
+      const lit = 1 - fade
       tmp.setRGB(
-        (r * sky + glow * 0.34) * contact,
-        (g * sky + glow * 0.22) * contact,
-        (b * sky + glow * 0.12) * contact,
+        (r * sky + glow * 0.34) * contact * lit + SILHOUETTE[0] * fade,
+        (g * sky + glow * 0.22) * contact * lit + SILHOUETTE[1] * fade,
+        (b * sky + glow * 0.12) * contact * lit + SILHOUETTE[2] * fade,
         THREE.SRGBColorSpace
       )
       colors[i * 3] = tmp.r
@@ -503,13 +568,14 @@ export class SkyScene {
       lg.setAttribute('position', new THREE.BufferAttribute(mesh.outline, 3))
       this.outline = new THREE.LineSegments(
         lg,
-        new THREE.LineBasicMaterial({ color: 0xb8c4d6, transparent: true, opacity: 0.3 })
+        // Les arêtes restent au bord du cercle : elles y rejoignent le liseré de la ville lointaine.
+        new THREE.LineBasicMaterial({ color: hexOf(OUTLINE_RGB), transparent: true, opacity: OUTLINE_ALPHA, fog: false })
       )
       this.scene.add(this.outline)
     }
 
-    // Brume : plus le rayon est grand, plus elle est légère (≈ 35 % à la limite du cercle).
-    this.scene.fog = new THREE.FogExp2(FOG_COLOR, 0.45 / (radius + 80))
+    // Brume de distance vers la couleur des silhouettes : les lumières de la ville s'estompent.
+    this.scene.fog = new THREE.FogExp2(hexOf(SILHOUETTE), 0.45 / (radius + 80))
   }
 
   private readonly relief = new THREE.Group()
@@ -527,39 +593,69 @@ export class SkyScene {
     }
     if (!this.relief.parent) this.sky.add(this.relief)
     if (!h) return
-    const { profile, segments, maxDistance } = h
+    const { profile, segments, maxDistance, urbanDistance } = h
     const n = profile.azimuths
     const azOf = (i: number) => (i / n) * 360
     const alt = (i: number) => {
       const a = profile.skyline[i % n]
       return Number.isNaN(a) ? -30 : a
     }
+    /** Crête de la ville (MNS) plutôt que du relief : même trait discret que les arêtes des volumes. */
+    const isUrban = (d: number) => !Number.isNaN(d) && d <= urbanDistance
 
-    // Masse : bande entre la crête et −30°, fermée sur 360°.
-    const fill = new Float32Array((n + 1) * 2 * 3)
-    for (let i = 0; i <= n; i++) {
-      fill.set(dirTo(azOf(i), alt(i), RELIEF_RADIUS), i * 6)
-      fill.set(dirTo(azOf(i), -30, RELIEF_RADIUS), i * 6 + 3)
+    // Masse : pour chaque direction, une colonne de 0,1° faite des plans successifs du terrain vu,
+    // du plus proche (en bas, sombre) au plus lointain (en haut, éclairci par la brume).
+    const total = profile.layerStart[n]
+    const massPos = new Float32Array(total * 4 * 3)
+    const massCol = new Float32Array(total * 4 * 4)
+    const massIdx = new Uint32Array(total * 6)
+    let v = 0
+    let t = 0
+    for (let i = 0; i < n; i++) {
+      const a0 = azOf(i - 0.5)
+      const a1 = azOf(i + 0.5)
+      for (let k = profile.layerStart[i]; k < profile.layerStart[i + 1]; k++) {
+        const lo = profile.layers[k * 3]
+        const hi = profile.layers[k * 3 + 1]
+        if (!(hi > lo)) continue
+        const [r, g, b] = depthColor(profile.layers[k * 3 + 2])
+        massPos.set(dirTo(a0, lo, RELIEF_RADIUS), v * 3)
+        massPos.set(dirTo(a1, lo, RELIEF_RADIUS), v * 3 + 3)
+        massPos.set(dirTo(a0, hi, RELIEF_RADIUS), v * 3 + 6)
+        massPos.set(dirTo(a1, hi, RELIEF_RADIUS), v * 3 + 9)
+        for (let c = 0; c < 4; c++) massCol.set([r, g, b, 1], (v + c) * 4)
+        massIdx.set([v, v + 1, v + 2, v + 2, v + 1, v + 3], t)
+        v += 4
+        t += 6
+      }
     }
+    const massGeom = new THREE.BufferGeometry()
+    massGeom.setAttribute('position', new THREE.BufferAttribute(massPos.subarray(0, v * 3), 3))
+    massGeom.setAttribute('rgba', new THREE.BufferAttribute(massCol.subarray(0, v * 4), 4))
+    massGeom.setIndex(new THREE.BufferAttribute(massIdx.subarray(0, t), 1))
+    const mass = new THREE.Mesh(
+      massGeom,
+      new THREE.ShaderMaterial({ vertexShader: reliefVertex, fragmentShader: reliefFragment, side: THREE.DoubleSide })
+    )
+    mass.frustumCulled = false
+    mass.renderOrder = -2
+    this.relief.add(mass)
+
+    // Bande continue sur 360° pour le halo sous la crête.
     const fillIdx: number[] = []
     for (let i = 0; i < n; i++) {
       const a = i * 2
       fillIdx.push(a, a + 1, a + 2, a + 2, a + 1, a + 3)
     }
-    const fillGeom = new THREE.BufferGeometry()
-    fillGeom.setAttribute('position', new THREE.BufferAttribute(fill, 3))
-    fillGeom.setIndex(fillIdx)
-    const mass = new THREE.Mesh(fillGeom, new THREE.MeshBasicMaterial({ color: 0x0c111c, side: THREE.DoubleSide, fog: false }))
-    mass.frustumCulled = false
-    mass.renderOrder = -2
-    this.relief.add(mass)
 
     // Halo sous la crête : dégradé additif de 0,4° de haut, plus vif pour les crêtes proches.
+    // Pas de halo sur les toits de la ville : il est réservé au relief.
     const glowPos = new Float32Array((n + 1) * 2 * 3)
     const glowCol = new Float32Array((n + 1) * 2 * 4)
     const near = (d: number) => (Number.isNaN(d) ? 0 : 1 - 0.6 * Math.min(1, d / Math.max(1, maxDistance)))
     for (let i = 0; i <= n; i++) {
-      const strength = near(profile.skylineDistance[i % n])
+      const sd = profile.skylineDistance[i % n]
+      const strength = isUrban(sd) ? 0 : near(sd)
       glowPos.set(dirTo(azOf(i), alt(i), RELIEF_RADIUS * 0.997), i * 6)
       glowPos.set(dirTo(azOf(i), alt(i) - 0.4, RELIEF_RADIUS * 0.997), i * 6 + 3)
       glowCol.set([0.55, 0.78, 1.0, 0.45 * strength], i * 8)
@@ -588,8 +684,10 @@ export class SkyScene {
     const lineCol = new Float32Array((n + 1) * 4)
     for (let i = 0; i <= n; i++) {
       linePos.set(dirTo(azOf(i), alt(i), RELIEF_RADIUS * 0.995), i * 3)
-      const s = Number.isNaN(profile.skyline[i % n]) ? 0 : 0.55 + 0.45 * near(profile.skylineDistance[i % n])
-      lineCol.set([0.75, 0.9, 1.0, s], i * 4)
+      const sd = profile.skylineDistance[i % n]
+      if (Number.isNaN(profile.skyline[i % n])) lineCol.set([0, 0, 0, 0], i * 4)
+      else if (isUrban(sd)) lineCol.set([...OUTLINE_RGB, OUTLINE_ALPHA], i * 4)
+      else lineCol.set([0.75, 0.9, 1.0, 0.55 + 0.45 * near(sd)], i * 4)
     }
     const lineGeom = new THREE.BufferGeometry()
     lineGeom.setAttribute('position', new THREE.BufferAttribute(linePos, 3))
