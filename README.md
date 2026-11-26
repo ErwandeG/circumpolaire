@@ -1,6 +1,6 @@
 # Star Trail Planner
 
-Application Windows et Linux pour préparer des photos circumpolaires (filés d'étoiles) en ville.
+Application Windows et Linux pour préparer des photos circumpolaires (filés d'étoiles).
 Anciennement « Circumpolaire ».
 Cahier des charges : document « Cahier des charges — Appli circumpolaire ».
 
