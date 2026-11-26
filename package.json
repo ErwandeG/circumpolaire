@@ -1,6 +1,6 @@
 {
   "name": "circumpolaire",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Préparation de photos circumpolaires en ville : calendrier lunaire et vue du ciel à hauteur d'homme.",
   "private": true,
   "license": "MIT",
@@ -12,9 +12,11 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "dist": "electron-vite build && electron-builder --win --x64"
+    "dist": "electron-vite build && electron-builder --win --x64",
+    "dist:linux": "electron-vite build && electron-builder --linux AppImage deb --x64 --publish never"
   },
   "author": "ErwandeG",
+  "homepage": "https://github.com/ErwandeG/circumpolaire",
   "build": {
     "appId": "io.github.erwandeg.circumpolaire",
     "productName": "Circumpolaire",
@@ -38,6 +40,16 @@
       "createDesktopShortcut": true,
       "shortcutName": "Circumpolaire",
       "artifactName": "Circumpolaire-${version}-installation.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Science",
+      "maintainer": "ErwandeG <91877730+ErwandeG@users.noreply.github.com>",
+      "synopsis": "Préparation de photos circumpolaires en ville",
+      "artifactName": "Circumpolaire-${version}-linux-${arch}.${ext}"
     },
     "portable": {
       "artifactName": "Circumpolaire-${version}-portable.${ext}"

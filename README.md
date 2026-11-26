@@ -13,6 +13,7 @@ Cahier des charges : document « Cahier des charges — Appli circumpolaire ».
 | `npm test` | Tests automatiques |
 | `npm run typecheck` | Vérification des types TypeScript |
 | `npm run dist` | Compile l'exécutable Windows dans `dist/` : installateur et version portable |
+| `npm run dist:linux` | Compile les versions Linux (AppImage et .deb), à lancer sous Linux. À chaque release publiée, GitHub Actions le fait et les ajoute à la release |
 
 ## Catalogue d'étoiles
 
