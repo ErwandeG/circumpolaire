@@ -37,15 +37,19 @@ describe('surface 3D', () => {
     const mns = grid(minX, maxY, n, n, (x, y) => (inHouse(x, y) ? 160 : 140))
     const t = buildTerrain(obs, mns, mnt, [house], 60)
     let found = false
+    let roofTop = -Infinity
     for (let i = 0; i < t.kinds.length; i++) {
       if (t.kinds[i] !== SurfaceKind.Building) continue
       found = true
       const z = t.positions[i * 3 + 2]
-      expect(-z).toBeGreaterThan(9) // au nord : z négatif
-      expect(-z).toBeLessThan(16)
-      expect(t.positions[i * 3 + 1]).toBeCloseTo(160 - 141.7, 3)
+      // Murs et toit tiennent dans l'emprise, au nord (z négatif), entre 10 et 15 m
+      // (± 0,3 m : le rectangle Lambert est tourné de 3,4° par rapport au nord vrai).
+      expect(-z).toBeGreaterThan(9.6)
+      expect(-z).toBeLessThan(15.4)
+      roofTop = Math.max(roofTop, t.positions[i * 3 + 1])
     }
     expect(found).toBe(true)
+    expect(roofTop).toBeCloseTo(160 - 141.7, 3)
   })
 
   it('classe en végétation ce qui dépasse du sol hors des emprises', () => {
@@ -73,9 +77,10 @@ describe('surface 3D', () => {
   it('remplace un trou du LiDAR par le volume BD TOPO', () => {
     const mns = grid(minX, maxY, n, n, (x, y) => (inHouse(x, y) ? Number.NaN : 140))
     const t = buildTerrain(obs, mns, mnt, [house], 60)
-    const i = Array.from(t.kinds).indexOf(SurfaceKind.Fallback)
-    expect(i).toBeGreaterThan(-1)
-    expect(t.positions[i * 3 + 1]).toBeCloseTo(140 + 20 - 141.7, 3)
+    let top = -Infinity
+    for (let i = 0; i < t.kinds.length; i++)
+      if (t.kinds[i] === SurfaceKind.Fallback) top = Math.max(top, t.positions[i * 3 + 1])
+    expect(top).toBeCloseTo(140 + 20 - 141.7, 3)
     expect(t.fallbackShare).toBeGreaterThan(0)
   })
 

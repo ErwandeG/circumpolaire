@@ -1,4 +1,5 @@
-import { bbox, contains, distanceToBuilding, fallbackHeight, type Building } from './geo/buildings'
+import { buildBuildingGeometry } from './buildings3d'
+import { bbox, contains, distanceToBuilding, type Building } from './geo/buildings'
 import { fromLambert93, toLambert93 } from './geo/lambert93'
 import { localFrame, toLocal, type LocalFrame } from './geo/local'
 
@@ -152,30 +153,41 @@ export function buildTerrain(
       }
   })
 
+  // Abords des bâtiments (1 m) : débords de toit et décalages entre LiDAR et emprise.
+  // Le sol y reste au niveau du MNT, sinon ces pixels deviendraient de faux arbres collés aux façades.
+  const NEAR_CELLS = 2
+  const nearBuilding = new Uint8Array(cols * rows)
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      if (buildingAt[r * cols + c] < 0) continue
+      for (let dr = -NEAR_CELLS; dr <= NEAR_CELLS; dr++)
+        for (let dc = -NEAR_CELLS; dc <= NEAR_CELLS; dc++) {
+          const rr = r + dr
+          const cc = c + dc
+          if (rr >= 0 && cc >= 0 && rr < rows && cc < cols) nearBuilding[rr * cols + cc] = 1
+        }
+    }
+
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const i = r * cols + c
       const x = mns.minX + (c + 0.5) * mns.res
       const y = mns.maxY - (r + 0.5) * mns.res
       const inCircle = Math.hypot(x - observer.x, y - observer.y) <= radius
-      const building = buildingAt[i] >= 0 ? touched[buildingAt[i]] : undefined
-      const masked = inCircle || building !== undefined
+      const inBuilding = buildingAt[i] >= 0
       let ground = mnt.values[i]
       if (Number.isNaN(ground)) ground = eyeAltitude - EYE_HEIGHT_M
       let h = ground
       let kind: number = SurfaceKind.Ground
-      if (masked) {
+      // Dans les emprises, le sol passe sous le bâtiment reconstruit à part.
+      if (inCircle && !inBuilding) {
         maskedCells++
         const s = mns.values[i]
-        if (!Number.isNaN(s)) {
+        if (Number.isNaN(s)) {
+          fallbackCells++
+        } else if (!nearBuilding[i]) {
           h = s
-          if (s - ground > 1.0) kind = building ? SurfaceKind.Building : SurfaceKind.Vegetation
-        } else if (building) {
-          h = ground + fallbackHeight(building).height
-          kind = SurfaceKind.Fallback
-          fallbackCells++
-        } else {
-          fallbackCells++
+          if (s - ground > 1.0) kind = SurfaceKind.Vegetation
         }
       }
       const g = fromLambert93(x, y)
@@ -188,7 +200,37 @@ export function buildTerrain(
     }
   }
 
-  return assembleMesh(positions, kinds, groundRel, cols, rows, fallbackCells, maskedCells, eyeAltitude)
+  const ground = assembleMesh(positions, kinds, groundRel, cols, rows, 0, 0, eyeAltitude)
+
+  // Bâtiments reconstruits : murs verticaux des emprises BD TOPO, toits LiDAR.
+  const toScene = (x: number, y: number, h: number): [number, number, number] => {
+    const g = fromLambert93(x, y)
+    const local = toLocal(frame, g.lat, g.lon)
+    return [local.e, h - eyeAltitude, -local.n]
+  }
+  const groundAltitude = (x: number, y: number) => sample(mnt, x, y)
+  const bld = buildBuildingGeometry(touched, buildingAt, mns, groundAltitude, toScene)
+
+  // Assemblage sol + bâtiments dans un seul maillage.
+  const nGround = ground.kinds.length
+  const allPositions = new Float32Array(ground.positions.length + bld.positions.length)
+  allPositions.set(ground.positions)
+  allPositions.set(bld.positions, ground.positions.length)
+  const allKinds = new Uint8Array(nGround + bld.kinds.length)
+  allKinds.set(ground.kinds)
+  allKinds.set(bld.kinds, nGround)
+  const allIndices = new Uint32Array(ground.indices.length + bld.indices.length)
+  allIndices.set(ground.indices)
+  for (let i = 0; i < bld.indices.length; i++) allIndices[ground.indices.length + i] = bld.indices[i] + nGround
+
+  const total = maskedCells + bld.footprintCells
+  return {
+    positions: allPositions,
+    kinds: allKinds,
+    indices: allIndices,
+    fallbackShare: total ? (fallbackCells + bld.fallbackCells) / total : 0,
+    eyeAltitude
+  }
 }
 
 /**
