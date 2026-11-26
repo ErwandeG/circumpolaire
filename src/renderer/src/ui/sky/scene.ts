@@ -46,11 +46,12 @@ function starColor(bv: number): THREE.Color {
 
 /** Taille d'un point d'étoile en pixels selon la magnitude. */
 function starSizePx(mag: number): number {
-  return Math.max(1.4, Math.min(9, 1.6 + (5.2 - mag) * 1.15))
+  return Math.max(1.1, Math.min(9, 1.6 + (5.2 - mag) * 1.15))
 }
 
+/** Les étoiles faibles (jusqu'à la magnitude 7) restent discrètes pour ne pas noyer les filés brillants. */
 function trailAlpha(mag: number): number {
-  return Math.max(0.12, Math.min(0.95, 0.2 + (5.2 - mag) * 0.14))
+  return Math.max(0.05, Math.min(0.95, 0.2 + (5.2 - mag) * 0.14))
 }
 
 // Les objets célestes sous l'horizon (y < 0) sont masqués.
@@ -291,7 +292,11 @@ export class SkyScene {
       this.starPoints.frustumCulled = false
       this.sky.add(this.starPoints)
     }
-    const sg = this.starPoints.geometry
+    // Nouvelle géométrie à chaque calcul, l'ancienne est libérée de la carte graphique
+    // (sinon les tampons s'accumulent et tout ralentit à 15 000 étoiles).
+    this.starPoints.geometry.dispose()
+    const sg = new THREE.BufferGeometry()
+    this.starPoints.geometry = sg
     sg.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     sg.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
     sg.setAttribute('color', new THREE.BufferAttribute(colors, 3))
@@ -333,7 +338,9 @@ export class SkyScene {
       this.trailLines.frustumCulled = false
       this.sky.add(this.trailLines)
     }
-    const tg = this.trailLines.geometry
+    this.trailLines.geometry.dispose()
+    const tg = new THREE.BufferGeometry()
+    this.trailLines.geometry = tg
     tg.setAttribute('position', new THREE.BufferAttribute(linePos, 3))
     tg.setAttribute('rgba', new THREE.BufferAttribute(lineCol, 4))
 

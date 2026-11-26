@@ -6,7 +6,8 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const COUNT = 2000
+// L'appli affiche de 1 000 à 15 000 étoiles : on garde les 15 000 plus brillantes, triées par magnitude.
+const COUNT = 15000
 const csvPath = process.argv[2]
 if (!csvPath) {
   console.error('Usage : node scripts/build-stars.mjs <hygdata_v41.csv>')

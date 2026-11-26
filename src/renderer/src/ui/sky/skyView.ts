@@ -15,7 +15,14 @@ import {
 } from '../../domain/optics'
 import { formatParisTime, parisDayOf, parisTime, type CalendarDay } from '../../domain/time'
 import { distanceM, fromLocal, localFrame, stepToward } from '../../domain/geo/local'
-import { EYE_HEIGHT_M, eyePosition, isBlocked, type WalkContext } from '../../domain/terrain'
+import {
+  EYE_HEIGHT_M,
+  SCENE_RADIUS_M,
+  eyePosition,
+  isBlocked,
+  type SceneRadius,
+  type WalkContext
+} from '../../domain/terrain'
 import { checkPointInFrance } from '../../services/geocoding'
 import { loadTerrain } from '../../services/terrainService'
 import { createMiniMap } from './miniMap'
@@ -45,12 +52,15 @@ interface SkyElements {
   focalOut: HTMLOutputElement
   duration: HTMLInputElement
   durationOut: HTMLOutputElement
+  stars: HTMLInputElement
+  starsOut: HTMLOutputElement
+  radius50: HTMLButtonElement
+  radius150: HTMLButtonElement
   sensor: HTMLSelectElement
   landscape: HTMLButtonElement
   portrait: HTMLButtonElement
   date: HTMLInputElement
   time: HTMLInputElement
-  pad: HTMLElement
   miniMapBox: HTMLElement
   miniMap: HTMLElement
   miniMapToggle: HTMLButtonElement
@@ -60,8 +70,26 @@ export interface SkyView {
   open(observer: Observer, night: CalendarDay): void
 }
 
-const stars = starData.stars as StarRow[]
-const field = new StarField(stars)
+/** Catalogue trié par éclat : afficher N étoiles = prendre les N premières. */
+const allStars = starData.stars as StarRow[]
+export const STAR_COUNT_MIN = 1000
+export const STAR_COUNT_MAX = Math.min(15000, allStars.length)
+export const STAR_COUNT_STEP = 1000
+const fields = new Map<number, StarField>()
+function starField(count: number): StarField {
+  let f = fields.get(count)
+  if (!f) {
+    f = new StarField(allStars.slice(0, count))
+    fields.set(count, f)
+  }
+  return f
+}
+/** Nombre de points par filé : au plus ~400 000 sommets calculés, pour rester fluide à 15 000 étoiles. */
+function trailSamples(durationMin: number, count: number): number {
+  const wanted = Math.round(durationMin / 2) + 1
+  const budget = Math.floor(400_000 / count)
+  return Math.max(4, Math.min(61, wanted, budget))
+}
 const pad = (n: number) => String(n).padStart(2, '0')
 const fmt1 = (x: number) => x.toLocaleString('fr-FR', { maximumFractionDigits: 1 })
 
@@ -75,7 +103,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     sensorId: SENSORS[0].id,
     orientation: 'landscape' as FrameOrientation,
     azimuth: 0,
-    altitude: 48.6
+    altitude: 48.6,
+    starCount: 2000,
+    radius: SCENE_RADIUS_M as SceneRadius
   }
 
   for (const s of SENSORS) {
@@ -98,7 +128,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   let moonInfo = { fraction: 0, altitude: 0, azimuth: 0 }
   function recomputeSky(): void {
     const { lat, lon } = state.observer
-    const samples = Math.max(4, Math.min(61, Math.round(state.durationMin / 2) + 1))
+    const field = starField(state.starCount)
+    const stars = allStars.slice(0, state.starCount)
+    const samples = trailSamples(state.durationMin, state.starCount)
     const starStart = field.trails(state.start, 0, 1, lat, lon)
     const trails = field.trails(state.start, state.durationMin, samples, lat, lon)
     const moon = moonState(state.start, state.durationMin, Math.min(samples, 25), lat, lon)
@@ -181,6 +213,8 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       `Visée az ${Math.round(az)}°, haut. ${fmt1(state.altitude)}° · Champ ${fmt1(f.h)}° × ${fmt1(f.v)}° · ` +
       `Arc des filés ${fmt1(arc)}° · ${moon}`
     el.focalOut.textContent = `${roundFocal(state.focalMm)} mm`
+    const limit = allStars[state.starCount - 1][2]
+    el.starsOut.textContent = `${state.starCount.toLocaleString('fr-FR')} (magnitude ≤ ${fmt1(limit)})`
     el.durationOut.textContent = `${state.durationMin} min`
   }
 
@@ -213,7 +247,13 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.duration.min = String(DURATION_MIN)
     el.duration.max = String(DURATION_MAX)
     el.duration.value = String(state.durationMin)
+    el.stars.min = String(STAR_COUNT_MIN)
+    el.stars.max = String(STAR_COUNT_MAX)
+    el.stars.step = String(STAR_COUNT_STEP)
+    el.stars.value = String(state.starCount)
     el.sensor.value = state.sensorId
+    el.radius50.setAttribute('aria-pressed', String(state.radius === 50))
+    el.radius150.setAttribute('aria-pressed', String(state.radius === 150))
     el.landscape.setAttribute('aria-pressed', String(state.orientation === 'landscape'))
     el.portrait.setAttribute('aria-pressed', String(state.orientation === 'portrait'))
     const d = parisDayOf(state.start)
@@ -238,6 +278,20 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     renderHud()
     scheduleSky()
   })
+  el.stars.addEventListener('input', () => {
+    state.starCount = Number(el.stars.value)
+    renderHud()
+    scheduleSky()
+  })
+  const setRadius = (r: SceneRadius) => {
+    if (state.radius === r) return
+    state.radius = r
+    syncInputs()
+    // On garde la scène affichée pendant le chargement de la nouvelle zone.
+    void loadBuildings(true)
+  }
+  el.radius50.addEventListener('click', () => setRadius(50))
+  el.radius150.addEventListener('click', () => setRadius(150))
   el.landscape.addEventListener('click', () => {
     state.orientation = 'landscape'
     syncInputs()
@@ -335,7 +389,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     }
     el.terrain.textContent = 'Chargement des bâtiments et du relief (LiDAR HD)…'
     delete el.terrain.dataset.tone
-    const res = await loadTerrain(state.observer.lat, state.observer.lon)
+    const res = await loadTerrain(state.observer.lat, state.observer.lon, state.radius)
     if (id !== terrainRequest) return // une autre vue a été ouverte entre-temps
     loading = false
     if (res.status === 'error') {
@@ -344,7 +398,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       draw()
       return
     }
-    const parts = [`${res.buildingCount} bâtiment${res.buildingCount > 1 ? 's' : ''} dans les 60 m`]
+    const parts = [`${res.buildingCount} bâtiment${res.buildingCount > 1 ? 's' : ''} dans les ${state.radius} m`]
     if (res.mesh.fallbackShare > 0.01) {
       parts.push(`${Math.round(res.mesh.fallbackShare * 100)} % sans LiDAR (volumes BD TOPO en orange)`)
     }
@@ -357,14 +411,14 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.terrain.textContent = parts.join(' · ')
     walk = res.walk
     scene.setTerrain(res.mesh)
-    miniMap.setZone(res.walk.frame.lat0, res.walk.frame.lon0)
+    miniMap.setZone(res.walk.frame.lat0, res.walk.frame.lon0, state.radius)
     placeEye()
     draw()
   }
 
   // --- Déplacement à pied : 1 m/s, flèches de l'écran ou du clavier ---
-  /** Au-delà de cette distance du point de chargement, on recharge la zone en marchant. */
-  const RELOAD_DISTANCE_M = 30
+  /** Au-delà de la moitié du rayon depuis le point de chargement, on recharge la zone en marchant. */
+  const reloadDistance = () => state.radius / 2
 
   function step(forward: number, right: number): void {
     const d = stepToward(state.azimuth, forward, right)
@@ -381,7 +435,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     showCoords()
     draw()
     const origin = walk ? { lat: walk.frame.lat0, lon: walk.frame.lon0 } : null
-    if (origin && !loading && distanceM(origin, state.observer) > RELOAD_DISTANCE_M) void loadBuildings(true)
+    if (origin && !loading && distanceM(origin, state.observer) > reloadDistance()) void loadBuildings(true)
   }
 
   let stopTimer: ReturnType<typeof setTimeout> | undefined
@@ -398,7 +452,6 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   }
 
   setupWalker({
-    buttons: [...el.pad.querySelectorAll<HTMLButtonElement>('button[data-dir]')],
     isActive: () => !el.root.hidden,
     onStep: step,
     onStop: stopWalking
@@ -438,7 +491,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       recomputeSky()
       aimAtPole()
       layout()
-      miniMap.setZone(observer.lat, observer.lon)
+      miniMap.setZone(observer.lat, observer.lon, state.radius)
       miniMap.refresh(observer.lat, observer.lon)
       void loadBuildings(false)
     }

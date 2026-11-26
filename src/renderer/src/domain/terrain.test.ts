@@ -96,14 +96,24 @@ describe('surface 3D', () => {
 })
 
 describe('zone chargée', () => {
-  it('s’élargit aux bâtiments touchés par le cercle, dans la limite de 240 m', () => {
+  it('s’élargit aux bâtiments touchés par le cercle, dans la limite de 2 × rayon + 120 m', () => {
     const big: Building = {
       polygons: [[[[obs.x + 50, obs.y - 10], [obs.x + 200, obs.y - 10], [obs.x + 200, obs.y + 10], [obs.x + 50, obs.y + 10], [obs.x + 50, obs.y - 10]]]]
     }
-    const e = sceneExtent(obs.x, obs.y, [big])
+    const e = sceneExtent(obs.x, obs.y, [big], 60)
     expect(e.touched).toHaveLength(1)
     expect(e.maxX - obs.x).toBeGreaterThan(110)
     expect(e.maxX - obs.x).toBeLessThanOrEqual(120.5)
     expect(obs.x - e.minX).toBeCloseTo(60, 0)
+  })
+
+  it('à 150 m, couvre le cercle entier et ignore un bâtiment hors de portée', () => {
+    const far: Building = {
+      polygons: [[[[obs.x + 200, obs.y], [obs.x + 210, obs.y], [obs.x + 210, obs.y + 10], [obs.x + 200, obs.y + 10], [obs.x + 200, obs.y]]]]
+    }
+    const e = sceneExtent(obs.x, obs.y, [far], 150)
+    expect(e.touched).toHaveLength(0)
+    expect(e.maxX - obs.x).toBeCloseTo(150, 0)
+    expect(obs.y - e.minY).toBeCloseTo(150, 0)
   })
 })

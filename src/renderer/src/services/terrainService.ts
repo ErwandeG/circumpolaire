@@ -66,7 +66,7 @@ export type TerrainResult =
     }
   | { status: 'error'; message: string }
 
-export async function loadTerrain(lat: number, lon: number, radius = SCENE_RADIUS_M): Promise<TerrainResult> {
+export async function loadTerrain(lat: number, lon: number, radius: number = SCENE_RADIUS_M): Promise<TerrainResult> {
   try {
     const p0 = toLambert93(lat, lon)
     const buildings = await fetchBuildings(p0.x, p0.y, radius)

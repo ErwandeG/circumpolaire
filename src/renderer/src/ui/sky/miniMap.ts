@@ -6,8 +6,8 @@ import { PLAN_IGN_URL } from '../map'
 export interface MiniMap {
   /** Position de l'observateur, direction visée et champ horizontal (degrés). */
   update(lat: number, lon: number, azimuthDeg: number, hFovDeg: number): void
-  /** Centre du cercle des 60 m : le point d'où les bâtiments ont été chargés. */
-  setZone(lat: number, lon: number): void
+  /** Cercle des volumes 3D : le point d'où les bâtiments ont été chargés, et son rayon. */
+  setZone(lat: number, lon: number, radiusM: number): void
   /** À appeler quand la carte redevient visible. */
   refresh(lat: number, lon: number): void
 }
@@ -79,9 +79,10 @@ export function createMiniMap(
       const inner = map.getBounds().pad(-0.3)
       if (!inner.contains([lat, lon])) map.panTo([lat, lon], { animate: false })
     },
-    setZone(lat, lon) {
+    setZone(lat, lon, radiusM) {
       zoneCenter = [lat, lon]
       zone.setLatLng(zoneCenter)
+      zone.setRadius(radiusM)
     },
     refresh(lat, lon) {
       map.invalidateSize()

@@ -16,13 +16,21 @@ import {
 const LAT = 48.5734
 const LON = 7.7521
 const T = new Date('2026-12-15T21:00:00Z')
-const field = new StarField(starData.stars as StarRow[])
+const rows = starData.stars as StarRow[]
+const field = new StarField(rows.slice(0, 2000))
 const VEGA = Object.entries(starData.names).find(([, n]) => n === 'Vega')![0]
 
 describe('catalogue', () => {
-  it('contient 2 000 étoiles dont la Polaire', () => {
-    expect(field.count).toBe(2000)
+  it('contient 15 000 étoiles triées par éclat, dont la Polaire parmi les 1 000 premières', () => {
+    expect(rows).toHaveLength(15000)
+    for (let i = 1; i < rows.length; i++) expect(rows[i][2]).toBeGreaterThanOrEqual(rows[i - 1][2])
+    expect(starData.polarisIndex).toBeLessThan(1000)
     expect(starData.names[String(starData.polarisIndex) as keyof typeof starData.names]).toBe('Polaris')
+  })
+
+  it('donne les magnitudes limites attendues (2 000 → 5,2 ; 15 000 → 7,0)', () => {
+    expect(rows[1999][2]).toBeCloseTo(5.18, 1)
+    expect(rows[14999][2]).toBeCloseTo(6.97, 1)
   })
 })
 

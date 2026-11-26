@@ -2,13 +2,18 @@ import { bbox, contains, distanceToBuilding, fallbackHeight, type Building } fro
 import { fromLambert93, toLambert93 } from './geo/lambert93'
 import { localFrame, toLocal, type LocalFrame } from './geo/local'
 
-/** Rayon de la scène autour de l'observateur (cahier des charges : 60 m, modifiable). */
-export const SCENE_RADIUS_M = 60
+/** Rayons proposés pour les volumes 3D autour de l'observateur. */
+export const SCENE_RADII_M = [50, 150] as const
+export type SceneRadius = (typeof SCENE_RADII_M)[number]
+export const SCENE_RADIUS_M: SceneRadius = 50
 /** Pas des modèles LiDAR HD. */
 export const GRID_RES_M = 0.5
-/** Côté maximal de la zone chargée, même si un bâtiment touché par le cercle est très grand. */
-export const MAX_EXTENT_M = 240
 export const EYE_HEIGHT_M = 1.7
+
+/** Côté maximal de la zone chargée : le cercle plus 60 m de marge pour les bâtiments qu'il touche. */
+export function maxExtent(radius: number): number {
+  return 2 * radius + 120
+}
 
 /** Grille d'altitudes, ligne 0 = bord nord, colonne 0 = bord ouest (convention WMS). */
 export interface ElevationGrid {
@@ -34,7 +39,7 @@ export function sceneExtent(
   cx: number,
   cy: number,
   buildings: readonly Building[],
-  radius = SCENE_RADIUS_M
+  radius: number = SCENE_RADIUS_M
 ): { minX: number; minY: number; maxX: number; maxY: number; touched: Building[] } {
   const touched = buildings.filter((b) => distanceToBuilding(b, cx, cy) <= radius)
   let minX = cx - radius
@@ -48,7 +53,7 @@ export function sceneExtent(
     maxX = Math.max(maxX, bb.maxX)
     maxY = Math.max(maxY, bb.maxY)
   }
-  const half = MAX_EXTENT_M / 2
+  const half = maxExtent(radius) / 2
   minX = Math.max(minX, cx - half)
   minY = Math.max(minY, cy - half)
   maxX = Math.min(maxX, cx + half)
@@ -115,7 +120,7 @@ export function buildTerrain(
   mns: ElevationGrid,
   mnt: ElevationGrid,
   buildings: readonly Building[],
-  radius = SCENE_RADIUS_M
+  radius: number = SCENE_RADIUS_M
 ): TerrainMesh {
   const cols = mns.cols
   const rows = mns.rows
@@ -130,13 +135,30 @@ export function buildTerrain(
   let fallbackCells = 0
   let maskedCells = 0
 
+  // Index des bâtiments par cellule, calculé une fois sur l'emprise de chacun :
+  // indispensable à 150 m (jusqu'à ~700 000 cellules).
+  const buildingAt = new Int32Array(cols * rows).fill(-1)
+  touched.forEach((b, k) => {
+    const bb = bbox(b)
+    const c0 = Math.max(0, Math.floor((bb.minX - mns.minX) / mns.res))
+    const c1 = Math.min(cols - 1, Math.ceil((bb.maxX - mns.minX) / mns.res))
+    const r0 = Math.max(0, Math.floor((mns.maxY - bb.maxY) / mns.res))
+    const r1 = Math.min(rows - 1, Math.ceil((mns.maxY - bb.minY) / mns.res))
+    for (let r = r0; r <= r1; r++)
+      for (let c = c0; c <= c1; c++) {
+        const x = mns.minX + (c + 0.5) * mns.res
+        const y = mns.maxY - (r + 0.5) * mns.res
+        if (buildingAt[r * cols + c] < 0 && contains(b, x, y)) buildingAt[r * cols + c] = k
+      }
+  })
+
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const i = r * cols + c
       const x = mns.minX + (c + 0.5) * mns.res
       const y = mns.maxY - (r + 0.5) * mns.res
       const inCircle = Math.hypot(x - observer.x, y - observer.y) <= radius
-      const building = touched.find((b) => contains(b, x, y))
+      const building = buildingAt[i] >= 0 ? touched[buildingAt[i]] : undefined
       const masked = inCircle || building !== undefined
       let ground = mnt.values[i]
       if (Number.isNaN(ground)) ground = eyeAltitude - EYE_HEIGHT_M

@@ -1,3 +1,4 @@
+import { PHASE_EMOJI, PHASE_NAMES, moonPhasesInMonth, type MoonPhaseEvent } from '../domain/astro/phases'
 import { computeMonth, TRANCHE_LABELS, type NightInfo } from '../domain/calendar'
 import type { Place } from '../domain/place'
 import {
@@ -88,9 +89,12 @@ export function setupCalendar(
   let view = { year: today.year, month: today.month }
   let selected: CalendarDay = today
   let nights: NightInfo[] = []
+  let phases: MoonPhaseEvent[] = []
+  const phaseOn = (day: CalendarDay) => phases.find((p) => sameDay(p.day, day))
 
   function compute(): void {
     nights = computeMonth(view.year, view.month, place.lat, place.lon)
+    phases = moonPhasesInMonth(view.year, view.month)
   }
 
   function renderDetail(): void {
@@ -102,6 +106,13 @@ export function setupCalendar(
       return
     }
     d.append(el('h3', 'detail-title', nightTitle(night.day)))
+
+    const phase = phaseOn(night.day)
+    if (phase) {
+      d.append(
+        el('p', 'detail-line', `${PHASE_EMOJI[phase.quarter]} ${PHASE_NAMES[phase.quarter]} à ${formatParisTime(phase.time)}`)
+      )
+    }
 
     const w = night.window
     d.append(
@@ -148,6 +159,13 @@ export function setupCalendar(
       if (sameDay(night.day, selected)) btn.classList.add('is-selected')
       btn.setAttribute('aria-label', `${nightTitle(night.day)}, Lune éclairée à ${Math.round(night.illumination * 100)} %`)
       btn.append(el('span', 'day-num', String(night.day.day)))
+      const phase = phaseOn(night.day)
+      if (phase) {
+        const icon = el('span', 'day-phase', PHASE_EMOJI[phase.quarter])
+        icon.title = `${PHASE_NAMES[phase.quarter]} à ${formatParisTime(phase.time)}`
+        btn.append(icon)
+        btn.classList.add('has-phase')
+      }
       if (night.window.kind === 'nautical') {
         const badge = el('span', 'day-badge', 'N')
         badge.title = 'Nuit nautique : nuit astronomique absente ou de moins d’1 h'

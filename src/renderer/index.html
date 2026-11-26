@@ -54,6 +54,7 @@
               <span class="presence legend-bar"><span class="presence-moon" style="left: 55%; width: 45%"></span></span>
               Nuit : sombre = Lune couchée, clair = Lune levée
             </li>
+            <li class="legend-wide">🌑 nouvelle Lune · 🌓 premier quartier · 🌕 pleine Lune · 🌗 dernier quartier</li>
             <li class="legend-wide"><span class="day-badge legend-badge">N</span>Nuit nautique (nuit astronomique absente ou &lt; 1 h)</li>
           </ul>
         </section>
@@ -84,12 +85,11 @@
               <div id="sky-hud" class="sky-hud"></div>
             </div>
 
-            <div id="sky-pad" class="sky-pad" role="group" aria-label="Se déplacer (1 m/s) — flèches du clavier aussi">
-              <button type="button" data-dir="forward" class="pad-up" title="Avancer (↑)" aria-label="Avancer">▲</button>
-              <button type="button" data-dir="left" class="pad-left" title="Pas de côté à gauche (←)" aria-label="Pas de côté à gauche">◀</button>
-              <button type="button" data-dir="right" class="pad-right" title="Pas de côté à droite (→)" aria-label="Pas de côté à droite">▶</button>
-              <button type="button" data-dir="back" class="pad-down" title="Reculer (↓)" aria-label="Reculer">▼</button>
-            </div>
+            <p class="sky-keys">
+              Se déplacer (1 m/s) : flèches du clavier
+              <kbd>↑</kbd> avancer <kbd>↓</kbd> reculer <kbd>←</kbd><kbd>→</kbd> pas de côté.
+              Cliquez d’abord dans l’image si un réglage est actif.
+            </p>
 
             <div id="minimap-box" class="minimap">
               <button id="minimap-toggle" class="minimap-head" type="button" aria-expanded="true">Carte ▾</button>
@@ -108,9 +108,20 @@
               <label for="duration">Durée de pose <output id="duration-out"></output></label>
               <input id="duration" type="range" min="5" max="120" step="1" />
             </div>
+            <div class="ctrl ctrl-wide">
+              <label for="stars">Étoiles affichées <output id="stars-out"></output></label>
+              <input id="stars" type="range" min="1000" max="15000" step="1000" />
+            </div>
             <div class="ctrl">
               <label for="sensor">Capteur</label>
               <select id="sensor"></select>
+            </div>
+            <div class="ctrl">
+              <span class="ctrl-label">Volumes 3D jusqu’à</span>
+              <div class="seg" role="group" aria-label="Rayon des volumes 3D">
+                <button id="radius-50" type="button">50 m</button>
+                <button id="radius-150" type="button">150 m</button>
+              </div>
             </div>
             <div class="ctrl">
               <span class="ctrl-label">Cadrage</span>
@@ -131,7 +142,7 @@
             <span class="sky-legend"><i class="lg lg-building"></i>bâtiments</span>
             <span class="sky-legend"><i class="lg lg-vegetation"></i>arbres</span>
             <span class="sky-legend"><i class="lg lg-fallback"></i>volumes BD TOPO (pas de LiDAR)</span>
-            · Relief et bâtiments : IGN LiDAR HD et BD TOPO, rayon de 60 m.
+            · Relief et bâtiments : IGN LiDAR HD et BD TOPO.
             Étoiles : base HYG v4.1 (Hipparcos, Yale Bright Star, Gliese), licence CC BY-SA 4.0. Calculs : astronomy-engine.
           </p>
         </section>
