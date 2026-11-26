@@ -12,6 +12,7 @@ Cahier des charges : document « Cahier des charges — Appli circumpolaire ».
 | `npm start` | Construit puis lance l'appli |
 | `npm test` | Tests automatiques |
 | `npm run typecheck` | Vérification des types TypeScript |
+| `npm run dist` | Compile l'exécutable Windows dans `dist/` : installateur et version portable |
 
 ## Catalogue d'étoiles
 
