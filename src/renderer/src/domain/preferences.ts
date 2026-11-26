@@ -33,6 +33,8 @@ export interface ViewPreferences {
   /** Hauteur de l'œil au-dessus du sol, en mètres. */
   eyeHeight: number
   showTrees: boolean
+  /** Bâtiments HD (maquette 3D de Strasbourg) à la place des bâtiments reconstruits. */
+  hdBuildings: boolean
   /** Relief lointain (crêtes de montagne) affiché. */
   reliefOn: boolean
   /** Distance jusqu'à laquelle on cherche le relief, en mètres. */
@@ -62,6 +64,7 @@ export const DEFAULT_PREFERENCES: ViewPreferences = {
   controlsCollapsed: false,
   eyeHeight: EYE_HEIGHT_M,
   showTrees: true,
+  hdBuildings: false,
   reliefOn: false,
   reliefDistanceM: 5000
 }
@@ -99,6 +102,7 @@ export function sanitizePreferences(raw: unknown): ViewPreferences {
     controlsCollapsed: typeof p.controlsCollapsed === 'boolean' ? p.controlsCollapsed : d.controlsCollapsed,
     eyeHeight: eye === undefined ? d.eyeHeight : clampEyeHeight(eye),
     showTrees: typeof p.showTrees === 'boolean' ? p.showTrees : d.showTrees,
+    hdBuildings: typeof p.hdBuildings === 'boolean' ? p.hdBuildings : d.hdBuildings,
     reliefOn: typeof p.reliefOn === 'boolean' ? p.reliefOn : d.reliefOn,
     reliefDistanceM: relief === undefined ? d.reliefDistanceM : clampReliefDistance(relief)
   }

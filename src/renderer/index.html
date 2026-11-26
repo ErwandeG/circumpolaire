@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://data.geopf.fr; connect-src 'self' https://data.geopf.fr"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://data.geopf.fr; connect-src 'self' https://data.geopf.fr https://data.strasbourg.eu https://s3.eu-west-2.wasabisys.com"
     />
     <title>Star Trail Planner</title>
   </head>
@@ -189,6 +189,15 @@
                   </div>
                   <div class="ctrl">
                     <div class="ctrl-head">
+                      <span class="ctrl-label">Bâtiments HD <small class="wip">WIP Strasbourg</small></span>
+                      <div class="seg seg-small" role="group" aria-label="Bâtiments HD">
+                        <button id="hd-off" type="button">Masqués</button>
+                        <button id="hd-on" type="button" title="Maquette 3D LoD2 de l’Eurométropole de Strasbourg (2022) à la place des bâtiments reconstruits (BD TOPO et LiDAR). Ailleurs, rien ne change.">Affichés</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ctrl">
+                    <div class="ctrl-head">
                       <span class="ctrl-label">Relief lointain</span>
                       <div class="seg seg-small" role="group" aria-label="Relief lointain">
                         <button id="relief-off" type="button">Masqué</button>
@@ -208,7 +217,7 @@
                 <span class="sky-legend"><i class="lg lg-building"></i>bâtiments</span>
                 <span class="sky-legend"><i class="lg lg-vegetation"></i>arbres</span>
                 <span class="sky-legend"><i class="lg lg-fallback"></i>volumes BD TOPO (pas de LiDAR)</span>
-                · Relief et bâtiments : IGN LiDAR HD et BD TOPO ; relief lointain : IGN RGE ALTI.
+                · Relief et bâtiments : IGN LiDAR HD et BD TOPO ; bâtiments HD : maquette 3D 2022 de l’Eurométropole de Strasbourg (licence Etalab 2.0) ; relief lointain : IGN RGE ALTI.
                 Étoiles : base HYG v4.1 (Hipparcos, Yale Bright Star, Gliese), licence CC BY-SA 4.0. Calculs : astronomy-engine.
               </p>
               <p class="sky-keys">

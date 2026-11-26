@@ -13,6 +13,7 @@ import {
 } from '../domain/terrain'
 import { localFrame } from '../domain/geo/local'
 import { describeFetchError, fetchCached } from './cache'
+import { loadHdBuildings } from './hdService'
 
 const WMS = 'https://data.geopf.fr/wms-r'
 const WFS = 'https://data.geopf.fr/wfs/ows'
@@ -73,6 +74,8 @@ export type TerrainResult =
       lon: number
       movedM: number
       buildingCount: number
+      /** Dalles de bâtiments HD utilisées (0 : aucune, ou bâtiments HD désactivés). */
+      hdTiles: number
       /** Sol et bâtiments pour se déplacer dans la scène sans la recharger. */
       walk: WalkContext
     }
@@ -82,7 +85,7 @@ export async function loadTerrain(
   lat: number,
   lon: number,
   radius: number = SCENE_RADIUS_M,
-  options: TerrainOptions = {}
+  options: TerrainOptions & { hdBuildings?: boolean } = {}
 ): Promise<TerrainResult> {
   try {
     const p0 = toLambert93(lat, lon)
@@ -91,11 +94,16 @@ export async function loadTerrain(
     const geo = moved.moved > 0 ? fromLambert93(moved.x, moved.y) : { lat, lon }
     const ext = sceneExtent(moved.x, moved.y, buildings, radius)
     const res = gridResFor(radius)
-    const [mns, mnt] = await Promise.all([
+    const [mns, mnt, hd] = await Promise.all([
       fetchGrid('mns', ext.minX, ext.minY, ext.maxX, ext.maxY, res),
-      fetchGrid('mnt', ext.minX, ext.minY, ext.maxX, ext.maxY, res)
+      fetchGrid('mnt', ext.minX, ext.minY, ext.maxX, ext.maxY, res),
+      // Bâtiments HD (Strasbourg) : un échec n'empêche pas la vue, on garde alors les bâtiments reconstruits.
+      options.hdBuildings ? loadHdBuildings(geo.lat, geo.lon, radius).catch(() => null) : Promise.resolve(null)
     ])
-    const mesh = buildTerrain({ x: moved.x, y: moved.y, lat: geo.lat, lon: geo.lon }, mns, mnt, buildings, radius, options)
+    const mesh = buildTerrain({ x: moved.x, y: moved.y, lat: geo.lat, lon: geo.lon }, mns, mnt, buildings, radius, {
+      ...options,
+      hd: hd ?? undefined
+    })
     return {
       status: 'ok',
       mesh,
@@ -103,6 +111,7 @@ export async function loadTerrain(
       lon: geo.lon,
       movedM: moved.moved,
       buildingCount: ext.touched.length,
+      hdTiles: hd?.tileCount ?? 0,
       walk: { frame: localFrame(geo.lat, geo.lon), eyeAltitude: mesh.eyeAltitude, mnt, mns, buildings }
     }
   } catch (e) {

@@ -26,6 +26,7 @@ describe('préférences de la vue', () => {
       controlsCollapsed: true,
       eyeHeight: 12.5,
       showTrees: false,
+      hdBuildings: true,
       reliefOn: true,
       reliefDistanceM: 15000
     } as const

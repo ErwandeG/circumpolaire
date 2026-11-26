@@ -54,3 +54,35 @@ export function fromLambert93(x: number, y: number): { lat: number; lon: number 
 export function meridianConvergence(lon: number): number {
   return (N * (lon * DEG - LON0)) / DEG
 }
+
+/**
+ * Lambert conique conforme « CC48 » (EPSG:3948), zone 48° des coniques conformes 9 zones :
+ * système de la maquette 3D de l'Eurométropole de Strasbourg. Mêmes formules de Snyder.
+ */
+function lambertConformal(lon0: number, lat0: number, lat1: number, lat2: number, x0: number, y0: number) {
+  const n = (Math.log(m(lat1 * DEG)) - Math.log(m(lat2 * DEG))) / (Math.log(t(lat1 * DEG)) - Math.log(t(lat2 * DEG)))
+  const ff = m(lat1 * DEG) / (n * t(lat1 * DEG) ** n)
+  const rho0 = A * ff * t(lat0 * DEG) ** n
+  return {
+    forward(lat: number, lon: number): L93 {
+      const rho = A * ff * t(lat * DEG) ** n
+      const theta = n * (lon * DEG - lon0 * DEG)
+      return { x: x0 + rho * Math.sin(theta), y: y0 + rho0 - rho * Math.cos(theta) }
+    },
+    inverse(x: number, y: number): { lat: number; lon: number } {
+      const dx = x - x0
+      const dy = rho0 - (y - y0)
+      const tt = (Math.sign(n) * Math.hypot(dx, dy) / (A * ff)) ** (1 / n)
+      let phi = Math.PI / 2 - 2 * Math.atan(tt)
+      for (let i = 0; i < 8; i++) {
+        const s = E * Math.sin(phi)
+        phi = Math.PI / 2 - 2 * Math.atan(tt * ((1 - s) / (1 + s)) ** (E / 2))
+      }
+      return { lat: phi / DEG, lon: (Math.atan2(dx, dy) / n) / DEG + lon0 }
+    }
+  }
+}
+
+const CC48 = lambertConformal(3, 48, 47.25, 48.75, 1_700_000, 7_200_000)
+export const toCC48 = CC48.forward
+export const fromCC48 = CC48.inverse

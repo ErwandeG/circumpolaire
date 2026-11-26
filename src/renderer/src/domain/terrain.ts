@@ -27,6 +27,20 @@ const VEGETATION_MIN_M = 1
 export interface TerrainOptions {
   /** Arbres affichés (par défaut) ou ramenés au niveau du sol. */
   trees?: boolean
+  /**
+   * Bâtiments HD (maquette 3D LoD2) : là où ils existent, ils remplacent les bâtiments
+   * reconstruits (murs BD TOPO et toits LiDAR).
+   */
+  hd?: HdBuildings
+}
+
+/** Bâtiments HD en Lambert 93, relatifs à un point d'ancrage (voir services/hdService). */
+export interface HdBuildings {
+  anchorX: number
+  anchorY: number
+  /** Triangles [x − anchorX, y − anchorY, altitude] à la suite. */
+  triangles: Float32Array
+  covers(x: number, y: number): boolean
 }
 
 /** Côté maximal de la zone chargée : le cercle plus 60 m de marge pour les bâtiments qu'il touche. */
@@ -155,6 +169,13 @@ export function buildTerrain(
   const ground0 = sample(mnt, observer.x, observer.y)
   const eyeAltitude = (Number.isNaN(ground0) ? sample(mns, observer.x, observer.y) : ground0) + EYE_HEIGHT_M
   const touched = buildings.filter((b) => distanceToBuilding(b, observer.x, observer.y) <= radius)
+  // Bâtiments couverts par la maquette HD : leur emprise reste au sol (MNT), sans murs ni toit LiDAR.
+  const hd = options.hd
+  const replaced = touched.map((b) => {
+    if (!hd) return false
+    const bb = bbox(b)
+    return hd.covers((bb.minX + bb.maxX) / 2, (bb.minY + bb.maxY) / 2)
+  })
 
   const positions = new Float32Array(cols * rows * 3)
   const kinds = new Uint8Array(cols * rows)
@@ -240,7 +261,21 @@ export function buildTerrain(
     return [local.e, h - eyeAltitude, -local.n]
   }
   const groundAltitude = (x: number, y: number) => sample(mnt, x, y)
-  const bld = buildBuildingGeometry(touched, buildingAt, mns, groundAltitude, toScene)
+  const kept: Building[] = []
+  const keptIndex = touched.map((b, k) => (replaced[k] ? -1 : kept.push(b) - 1))
+  const buildingAtKept = buildingAt.map((k) => (k >= 0 ? keptIndex[k] : -1))
+  const bld = buildBuildingGeometry(kept, buildingAtKept, mns, groundAltitude, toScene)
+  const hdMesh = hd ? hdGeometry(hd, observer, radius, toScene, groundAltitude) : null
+  if (hdMesh) {
+    // Les triangles HD s'ajoutent aux bâtiments reconstruits restants (hors maquette).
+    const n0 = bld.kinds.length
+    for (let i = 0; i < hdMesh.count; i++) {
+      bld.positions.push(hdMesh.positions[i * 3], hdMesh.positions[i * 3 + 1], hdMesh.positions[i * 3 + 2])
+      bld.kinds.push(SurfaceKind.Building)
+      bld.elevations.push(hdMesh.elevations[i])
+      bld.indices.push(n0 + i)
+    }
+  }
 
   // Assemblage sol + bâtiments dans un seul maillage.
   const nGround = ground.kinds.length
@@ -418,5 +453,45 @@ function assembleMesh(
     outline: new Float32Array(0),
     fallbackShare: maskedCells ? fallbackCells / maskedCells : 0,
     eyeAltitude
+  }
+}
+
+/**
+ * Triangles HD dans le repère de la scène, limités au cercle (plus 60 m pour les bâtiments qu'il touche).
+ * Passage Lambert 93 → scène par une transformation affine autour de l'observateur (écart de quelques mm à 500 m).
+ */
+function hdGeometry(
+  hd: HdBuildings,
+  observer: { x: number; y: number },
+  radius: number,
+  toScene: (x: number, y: number, h: number) => [number, number, number],
+  groundAltitude: (x: number, y: number) => number
+): { positions: Float32Array; kinds: Uint8Array; elevations: Float32Array; count: number } {
+  const o = toScene(observer.x, observer.y, 0)
+  const ex = toScene(observer.x + 100, observer.y, 0)
+  const ey = toScene(observer.x, observer.y + 100, 0)
+  const reach = radius + 60
+  const t = hd.triangles
+  const positions: number[] = []
+  const elevations: number[] = []
+  for (let i = 0; i < t.length; i += 9) {
+    const cx = hd.anchorX + (t[i] + t[i + 3] + t[i + 6]) / 3
+    const cy = hd.anchorY + (t[i + 1] + t[i + 4] + t[i + 7]) / 3
+    if (Math.hypot(cx - observer.x, cy - observer.y) > reach) continue
+    const ground = groundAltitude(cx, cy)
+    for (let k = i; k < i + 9; k += 3) {
+      const dx = (hd.anchorX + t[k] - observer.x) / 100
+      const dy = (hd.anchorY + t[k + 1] - observer.y) / 100
+      const [, y0] = toScene(observer.x, observer.y, t[k + 2])
+      positions.push(o[0] + dx * (ex[0] - o[0]) + dy * (ey[0] - o[0]), y0, o[2] + dx * (ex[2] - o[2]) + dy * (ey[2] - o[2]))
+      elevations.push(Number.isNaN(ground) ? 10 : Math.max(0, t[k + 2] - ground))
+    }
+  }
+  const count = positions.length / 3
+  return {
+    positions: Float32Array.from(positions),
+    kinds: new Uint8Array(count).fill(SurfaceKind.Building),
+    elevations: Float32Array.from(elevations),
+    count
   }
 }

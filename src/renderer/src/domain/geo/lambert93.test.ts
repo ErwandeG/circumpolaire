@@ -37,3 +37,18 @@ describe('Lambert 93', () => {
     expect(meridianConvergence(7.75)).toBeCloseTo(3.45, 1)
   })
 })
+
+describe('CC48 (EPSG:3948)', () => {
+  it('place la cathédrale de Strasbourg dans sa dalle de la maquette 3D et revient au point', async () => {
+    const { toCC48, fromCC48 } = await import('./lambert93')
+    const p = toCC48(48.581867, 7.750863)
+    // Dalle « 2049974400_7275240000 » : coin sud-ouest en millimètres, 409,6 m de côté.
+    expect(p.x).toBeGreaterThan(2049974.4)
+    expect(p.x).toBeLessThan(2049974.4 + 409.6)
+    expect(p.y).toBeGreaterThan(7275240)
+    expect(p.y).toBeLessThan(7275240 + 409.6)
+    const g = fromCC48(p.x, p.y)
+    expect(g.lat).toBeCloseTo(48.581867, 7)
+    expect(g.lon).toBeCloseTo(7.750863, 7)
+  })
+})

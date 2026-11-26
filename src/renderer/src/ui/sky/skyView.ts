@@ -75,6 +75,8 @@ interface SkyElements {
   eyeNum: HTMLInputElement
   treesOn: HTMLButtonElement
   treesOff: HTMLButtonElement
+  hdOn: HTMLButtonElement
+  hdOff: HTMLButtonElement
   reliefOn: HTMLButtonElement
   reliefOff: HTMLButtonElement
   reliefDist: HTMLInputElement
@@ -139,6 +141,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     controlsCollapsed: prefs.controlsCollapsed,
     eyeHeight: prefs.eyeHeight,
     showTrees: prefs.showTrees,
+    hdBuildings: prefs.hdBuildings,
     reliefOn: prefs.reliefOn,
     reliefDistance: prefs.reliefDistanceM
   }
@@ -169,6 +172,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
           controlsCollapsed: state.controlsCollapsed,
           eyeHeight: state.eyeHeight,
           showTrees: state.showTrees,
+          hdBuildings: state.hdBuildings,
           reliefOn: state.reliefOn,
           reliefDistanceM: state.reliefDistance
         }),
@@ -362,6 +366,8 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.eye.value = String(Math.round(sliderFromEye(state.eyeHeight) * 1000))
     el.treesOn.setAttribute('aria-pressed', String(state.showTrees))
     el.treesOff.setAttribute('aria-pressed', String(!state.showTrees))
+    el.hdOn.setAttribute('aria-pressed', String(state.hdBuildings))
+    el.hdOff.setAttribute('aria-pressed', String(!state.hdBuildings))
     el.reliefOn.setAttribute('aria-pressed', String(state.reliefOn))
     el.reliefOff.setAttribute('aria-pressed', String(!state.reliefOn))
     el.reliefDist.value = String(Math.round(sliderFromRelief(state.reliefDistance) * 1000))
@@ -429,6 +435,17 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   }
   el.treesOn.addEventListener('click', () => setTrees(true))
   el.treesOff.addEventListener('click', () => setTrees(false))
+
+  // Bâtiments HD (maquette 3D de Strasbourg) : la zone est reconstruite.
+  const setHd = (on: boolean) => {
+    if (state.hdBuildings === on) return
+    state.hdBuildings = on
+    rememberSettings()
+    syncInputs()
+    void loadBuildings(true)
+  }
+  el.hdOn.addEventListener('click', () => setHd(true))
+  el.hdOff.addEventListener('click', () => setHd(false))
 
   // Relief lointain : affiché / masqué, distance de 200 m à 20 km.
   const setRelief = (on: boolean) => {
@@ -658,7 +675,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.terrain.textContent = 'Chargement des bâtiments et du relief (LiDAR HD)…'
     delete el.terrain.dataset.tone
     setBusy('terrain', 'Bâtiments et relief proche')
-    const res = await loadTerrain(state.observer.lat, state.observer.lon, state.radius, { trees: state.showTrees })
+    const res = await loadTerrain(state.observer.lat, state.observer.lon, state.radius, { trees: state.showTrees, hdBuildings: state.hdBuildings })
     if (id !== terrainRequest) return // une autre vue a été ouverte entre-temps
     loading = false
     setBusy('terrain', null)
@@ -670,6 +687,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       return
     }
     const parts = [`${res.buildingCount} bâtiment${res.buildingCount > 1 ? 's' : ''} dans les ${state.radius} m`]
+    if (res.hdTiles > 0) parts.push(`bâtiments HD (${res.hdTiles} dalle${res.hdTiles > 1 ? 's' : ''})`)
     if (res.mesh.fallbackShare > 0.01) {
       parts.push(`${Math.round(res.mesh.fallbackShare * 100)} % sans LiDAR (volumes BD TOPO en orange)`)
     }

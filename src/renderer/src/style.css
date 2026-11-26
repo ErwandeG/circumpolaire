@@ -474,6 +474,15 @@ body {
   gap: 8px;
 }
 
+.wip {
+  margin-left: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  color: #fbbf24;
+  border: 1px solid #78350f;
+  border-radius: 4px;
+}
+
 .seg-small button {
   padding: 2px 8px;
   font-size: 12px;
