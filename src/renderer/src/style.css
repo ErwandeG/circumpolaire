@@ -397,6 +397,42 @@ body {
   gap: 6px;
 }
 
+/* Curseur + saisie au clavier + unité */
+.ctrl-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctrl-slider input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+
+.ctrl input.num {
+  width: 74px;
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 13px;
+  text-align: right;
+  color: #e6e9ed;
+  background: #111827;
+  border: 1px solid #2b3647;
+  border-radius: 6px;
+  color-scheme: dark;
+}
+
+.ctrl input.num:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: -1px;
+}
+
+.ctrl .unit {
+  min-width: 40px;
+  font-size: 12px;
+  color: #8b97a6;
+}
+
 .seg {
   display: inline-flex;
   overflow: hidden;

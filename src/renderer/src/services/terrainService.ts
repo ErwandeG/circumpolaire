@@ -8,6 +8,7 @@ import {
   sceneExtent,
   type ElevationGrid,
   type TerrainMesh,
+  type TerrainOptions,
   type WalkContext
 } from '../domain/terrain'
 import { localFrame } from '../domain/geo/local'
@@ -77,7 +78,12 @@ export type TerrainResult =
     }
   | { status: 'error'; message: string }
 
-export async function loadTerrain(lat: number, lon: number, radius: number = SCENE_RADIUS_M): Promise<TerrainResult> {
+export async function loadTerrain(
+  lat: number,
+  lon: number,
+  radius: number = SCENE_RADIUS_M,
+  options: TerrainOptions = {}
+): Promise<TerrainResult> {
   try {
     const p0 = toLambert93(lat, lon)
     const buildings = await fetchBuildings(p0.x, p0.y, radius)
@@ -89,7 +95,7 @@ export async function loadTerrain(lat: number, lon: number, radius: number = SCE
       fetchGrid('mns', ext.minX, ext.minY, ext.maxX, ext.maxY, res),
       fetchGrid('mnt', ext.minX, ext.minY, ext.maxX, ext.maxY, res)
     ])
-    const mesh = buildTerrain({ x: moved.x, y: moved.y, lat: geo.lat, lon: geo.lon }, mns, mnt, buildings, radius)
+    const mesh = buildTerrain({ x: moved.x, y: moved.y, lat: geo.lat, lon: geo.lon }, mns, mnt, buildings, radius, options)
     return {
       status: 'ok',
       mesh,
@@ -97,7 +103,7 @@ export async function loadTerrain(lat: number, lon: number, radius: number = SCE
       lon: geo.lon,
       movedM: moved.moved,
       buildingCount: ext.touched.length,
-      walk: { frame: localFrame(geo.lat, geo.lon), eyeAltitude: mesh.eyeAltitude, mnt, buildings }
+      walk: { frame: localFrame(geo.lat, geo.lon), eyeAltitude: mesh.eyeAltitude, mnt, mns, buildings }
     }
   } catch (e) {
     const offline = e instanceof TypeError || (e instanceof DOMException && e.name === 'AbortError')

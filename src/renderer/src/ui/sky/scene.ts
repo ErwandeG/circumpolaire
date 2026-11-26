@@ -222,6 +222,7 @@ export class SkyScene {
     )
     ground.rotation.x = -Math.PI / 2
     ground.position.y = -EYE_HEIGHT_M
+    this.groundDisc = ground
     this.sky.add(ground)
 
     // Ligne d'horizon et points cardinaux.
@@ -509,9 +510,12 @@ export class SkyScene {
   private pointScale = window.devicePixelRatio
 
   /** Position de l'œil dans le repère de la scène chargée (mètres). */
-  setEye(x: number, y: number, z: number): void {
+  setEye(x: number, y: number, z: number, eyeHeight = EYE_HEIGHT_M): void {
     this.camera.position.set(x, y, z)
+    // Le sol lointain suit la caméra : il reste à la hauteur d'œil sous elle.
+    this.groundDisc.position.y = -eyeHeight
   }
+  private groundDisc!: THREE.Mesh
 
   setSize(width: number, height: number): void {
     this.renderer.setSize(width, height, false)

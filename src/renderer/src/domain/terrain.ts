@@ -18,6 +18,16 @@ export function gridResFor(radius: number): number {
   return radius > 200 ? 1 : GRID_RES_M
 }
 export const EYE_HEIGHT_M = 1.7
+/** Hauteur d'œil réglable, du ras du sol à un point haut (toit, colline). */
+export const EYE_HEIGHT_MIN_M = 0.2
+export const EYE_HEIGHT_MAX_M = 50
+/** Au-delà de cette hauteur au-dessus du sol, hors emprise de bâtiment : végétation. */
+const VEGETATION_MIN_M = 1
+
+export interface TerrainOptions {
+  /** Arbres affichés (par défaut) ou ramenés au niveau du sol. */
+  trees?: boolean
+}
 
 /** Côté maximal de la zone chargée : le cercle plus 60 m de marge pour les bâtiments qu'il touche. */
 export function maxExtent(radius: number): number {
@@ -136,8 +146,10 @@ export function buildTerrain(
   mns: ElevationGrid,
   mnt: ElevationGrid,
   buildings: readonly Building[],
-  radius: number = SCENE_RADIUS_M
+  radius: number = SCENE_RADIUS_M,
+  options: TerrainOptions = {}
 ): TerrainMesh {
+  const showTrees = options.trees !== false
   const cols = mns.cols
   const rows = mns.rows
   const ground0 = sample(mnt, observer.x, observer.y)
@@ -201,8 +213,12 @@ export function buildTerrain(
         if (Number.isNaN(s)) {
           fallbackCells++
         } else if (!nearBuilding[i]) {
-          h = s
-          if (s - ground > 1.0) kind = SurfaceKind.Vegetation
+          if (s - ground <= VEGETATION_MIN_M) h = s
+          // Ce qui dépasse du sol hors des emprises : surtout des arbres (aussi kiosques, abribus…).
+          else if (showTrees) {
+            h = s
+            kind = SurfaceKind.Vegetation
+          }
         }
       }
       const g = fromLambert93(x, y)
@@ -266,6 +282,8 @@ export interface WalkContext {
   frame: LocalFrame
   eyeAltitude: number
   mnt: ElevationGrid
+  /** Surface (toits) : au-dessus d'un toit, on peut passer au-dessus du bâtiment. */
+  mns: ElevationGrid
   buildings: readonly Building[]
 }
 
@@ -278,26 +296,34 @@ export function groundAt(ctx: WalkContext, lat: number, lon: number): number {
   return inside ? sample(g, p.x, p.y) : Number.NaN
 }
 
-/** Vrai si le point est dans un bâtiment : on ne traverse pas les façades. */
-export function isBlocked(ctx: WalkContext, lat: number, lon: number): boolean {
+/**
+ * Vrai si l'œil entrerait dans un bâtiment : on ne traverse pas les façades.
+ * Un œil placé plus haut que le toit (au moins 0,5 m au-dessus) passe au-dessus du bâtiment.
+ */
+export function isBlocked(ctx: WalkContext, lat: number, lon: number, eyeHeight: number = EYE_HEIGHT_M): boolean {
   const p = toLambert93(lat, lon)
-  return ctx.buildings.some((b) => contains(b, p.x, p.y))
+  if (!ctx.buildings.some((b) => contains(b, p.x, p.y))) return false
+  const ground = groundAt(ctx, lat, lon)
+  const roof = sample(ctx.mns, p.x, p.y)
+  if (Number.isNaN(ground) || Number.isNaN(roof)) return true
+  return ground + eyeHeight < roof + 0.5
 }
 
 /**
  * Position de l'œil dans le repère de la scène (x = Est, y = haut, z = Sud),
- * à 1,70 m au-dessus du sol du point où l'on se trouve.
+ * à la hauteur d'œil choisie au-dessus du sol du point où l'on se trouve.
  */
 export function eyePosition(
   ctx: WalkContext,
   lat: number,
   lon: number,
-  lastGround: number
+  lastGround: number,
+  eyeHeight: number = EYE_HEIGHT_M
 ): { x: number; y: number; z: number; ground: number } {
   const local = toLocal(ctx.frame, lat, lon)
   const g = groundAt(ctx, lat, lon)
   const ground = Number.isNaN(g) ? lastGround : g
-  return { x: local.e, y: ground + EYE_HEIGHT_M - ctx.eyeAltitude, z: -local.n, ground }
+  return { x: local.e, y: ground + eyeHeight - ctx.eyeAltitude, z: -local.n, ground }
 }
 
 /** Bas des cimes : 40 % de la hauteur de l'arbre, au plus 5 m au-dessus du sol. */

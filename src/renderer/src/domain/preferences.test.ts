@@ -15,7 +15,16 @@ describe('préférences de la vue', () => {
 
   it('retrouve les réglages enregistrés', () => {
     const store = memoryStore()
-    const prefs = { focalMm: 135, durationMin: 90, orientation: 'portrait', starCount: 8000, radius: 150, miniMapCollapsed: true } as const
+    const prefs = {
+      focalMm: 135,
+      durationMin: 90,
+      orientation: 'portrait',
+      starCount: 8000,
+      radius: 500,
+      miniMapCollapsed: true,
+      eyeHeight: 12.5,
+      showTrees: false
+    } as const
     savePreferences(prefs, store)
     expect(loadPreferences(store)).toEqual(prefs)
   })
@@ -25,6 +34,13 @@ describe('préférences de la vue', () => {
     expect(p.focalMm).toBe(600)
     expect(p.durationMin).toBe(5)
     expect(p.starCount).toBe(15000)
+  })
+
+  it('borne la hauteur d’œil entre 20 cm et 50 m', () => {
+    expect(sanitizePreferences({ eyeHeight: 0.05 }).eyeHeight).toBe(0.2)
+    expect(sanitizePreferences({ eyeHeight: 120 }).eyeHeight).toBe(50)
+    expect(sanitizePreferences({ eyeHeight: 3.456 }).eyeHeight).toBe(3.46)
+    expect(sanitizePreferences({}).eyeHeight).toBe(1.7)
   })
 
   it('arrondit le nombre d’étoiles au millier', () => {

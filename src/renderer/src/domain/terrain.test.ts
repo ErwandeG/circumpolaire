@@ -58,6 +58,16 @@ describe('surface 3D', () => {
     expect(Array.from(t.kinds).includes(SurfaceKind.Vegetation)).toBe(true)
   })
 
+  it('ramène les arbres au sol quand on les masque', () => {
+    const mns = grid(minX, maxY, n, n, (x, y) => (Math.hypot(x - obs.x - 8, y - obs.y) < 2 ? 150 : 140))
+    const t = buildTerrain(obs, mns, mnt, [house], 60, { trees: false })
+    expect(Array.from(t.kinds).includes(SurfaceKind.Vegetation)).toBe(false)
+    let maxGroundY = -Infinity
+    for (let i = 0; i < t.kinds.length; i++)
+      if (t.kinds[i] === SurfaceKind.Ground) maxGroundY = Math.max(maxGroundY, t.positions[i * 3 + 1])
+    expect(maxGroundY).toBeCloseTo(140 - 141.7, 3)
+  })
+
   it('laisse voir sous un arbre : sol en dessous, cime au-dessus de l’œil', () => {
     // Arbre de 10 m de haut, de 4 m de rayon, centré sur l'observateur.
     const mns = grid(minX, maxY, n, n, (x, y) => (Math.hypot(x - obs.x, y - obs.y) < 4 ? 150 : 140))

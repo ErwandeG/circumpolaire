@@ -40,6 +40,19 @@ export function sliderFromFocal(focalMm: number): number {
   return Math.log(f / FOCAL_MIN_MM) / Math.log(FOCAL_MAX_MM / FOCAL_MIN_MM)
 }
 
+/** Hauteur d'œil sur un curseur logarithmique : autant de place pour 0,2 → 3 m que pour 3 → 50 m. */
+const EYE_MIN = 0.2
+const EYE_MAX = 50
+export function eyeFromSlider(position: number): number {
+  const p = Math.max(0, Math.min(1, position))
+  return EYE_MIN * Math.pow(EYE_MAX / EYE_MIN, p)
+}
+
+export function sliderFromEye(heightM: number): number {
+  const h = Math.max(EYE_MIN, Math.min(EYE_MAX, heightM))
+  return Math.log(h / EYE_MIN) / Math.log(EYE_MAX / EYE_MIN)
+}
+
 /** Arrondi lisible : 10, 14, 24, 35, 50, 85, 135, 200, 300… sur le slider. */
 export function roundFocal(focalMm: number): number {
   if (focalMm < 30) return Math.round(focalMm)

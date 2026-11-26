@@ -96,16 +96,43 @@
 
           <div class="sky-controls">
             <div class="ctrl ctrl-wide">
-              <label for="focal">Focale <output id="focal-out"></output></label>
-              <input id="focal" type="range" min="0" max="1000" step="1" />
+              <label for="focal">Focale</label>
+              <div class="ctrl-slider">
+                <input id="focal" type="range" min="0" max="1000" step="1" />
+                <input id="focal-num" class="num" type="number" min="10" max="600" step="1" aria-label="Focale en millimètres" />
+                <span class="unit">mm</span>
+              </div>
             </div>
             <div class="ctrl ctrl-wide">
-              <label for="duration">Durée de pose <output id="duration-out"></output></label>
-              <input id="duration" type="range" min="5" max="120" step="1" />
+              <label for="duration">Durée de pose</label>
+              <div class="ctrl-slider">
+                <input id="duration" type="range" min="5" max="120" step="1" />
+                <input id="duration-num" class="num" type="number" min="5" max="120" step="1" aria-label="Durée de pose en minutes" />
+                <span class="unit">min</span>
+              </div>
             </div>
             <div class="ctrl ctrl-wide">
               <label for="stars">Étoiles affichées <output id="stars-out"></output></label>
-              <input id="stars" type="range" min="1000" max="15000" step="1000" />
+              <div class="ctrl-slider">
+                <input id="stars" type="range" min="1000" max="15000" step="1000" />
+                <input id="stars-num" class="num" type="number" min="1000" max="15000" step="1000" aria-label="Nombre d’étoiles" />
+                <span class="unit">étoiles</span>
+              </div>
+            </div>
+            <div class="ctrl ctrl-wide">
+              <label for="eye">Hauteur du point de vue</label>
+              <div class="ctrl-slider">
+                <input id="eye" type="range" min="0" max="1000" step="1" />
+                <input id="eye-num" class="num" type="number" min="0.2" max="50" step="0.1" aria-label="Hauteur du point de vue en mètres" />
+                <span class="unit">m</span>
+              </div>
+            </div>
+            <div class="ctrl">
+              <span class="ctrl-label">Arbres</span>
+              <div class="seg" role="group" aria-label="Arbres">
+                <button id="trees-on" type="button">Affichés</button>
+                <button id="trees-off" type="button" title="Ramène au sol ce qui dépasse hors des bâtiments (arbres, mais aussi kiosques, abribus)">Masqués</button>
+              </div>
             </div>
             <div class="ctrl">
               <label for="sensor">Capteur</label>

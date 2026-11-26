@@ -4,12 +4,16 @@ import { StarField, enuToAltAz, moonState, northCelestialPole, type StarRow } fr
 import {
   DURATION_MAX,
   DURATION_MIN,
+  FOCAL_MAX_MM,
+  FOCAL_MIN_MM,
   SENSORS,
   SIDEREAL_DEG_PER_MIN,
+  eyeFromSlider,
   fieldOfView,
   focalFromSlider,
   frameSize,
   roundFocal,
+  sliderFromEye,
   sliderFromFocal,
   type FrameOrientation
 } from '../../domain/optics'
@@ -23,7 +27,7 @@ import {
   type WalkContext
 } from '../../domain/terrain'
 import { checkPointInFrance } from '../../services/geocoding'
-import { STAR_COUNT_MIN, STAR_COUNT_STEP } from '../../domain/preferences'
+import { STAR_COUNT_MIN, STAR_COUNT_STEP, clampEyeHeight } from '../../domain/preferences'
 import { loadPreferences, savePreferences } from '../../services/storage'
 import { loadTerrain } from '../../services/terrainService'
 import { EXPORT_LONG_SIDE_PX, composeCapture, saveCapture, type CaptureInfo } from './exportImage'
@@ -52,11 +56,16 @@ interface SkyElements {
   hud: HTMLElement
   warnings: HTMLElement
   focal: HTMLInputElement
-  focalOut: HTMLOutputElement
+  focalNum: HTMLInputElement
   duration: HTMLInputElement
-  durationOut: HTMLOutputElement
+  durationNum: HTMLInputElement
   stars: HTMLInputElement
+  starsNum: HTMLInputElement
   starsOut: HTMLOutputElement
+  eye: HTMLInputElement
+  eyeNum: HTMLInputElement
+  treesOn: HTMLButtonElement
+  treesOff: HTMLButtonElement
   radius50: HTMLButtonElement
   radius150: HTMLButtonElement
   radius500: HTMLButtonElement
@@ -108,7 +117,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     altitude: 48.6,
     starCount: Math.min(prefs.starCount, allStars.length),
     radius: prefs.radius as SceneRadius,
-    miniMapCollapsed: prefs.miniMapCollapsed
+    miniMapCollapsed: prefs.miniMapCollapsed,
+    eyeHeight: prefs.eyeHeight,
+    showTrees: prefs.showTrees
   }
 
   // Les réglages sont enregistrés peu après chaque changement, pour le lancement suivant.
@@ -123,7 +134,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
           orientation: state.orientation,
           starCount: state.starCount,
           radius: state.radius,
-          miniMapCollapsed: state.miniMapCollapsed
+          miniMapCollapsed: state.miniMapCollapsed,
+          eyeHeight: state.eyeHeight,
+          showTrees: state.showTrees
         }),
       300
     )
@@ -233,10 +246,17 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.hud.textContent =
       `Visée az ${Math.round(az)}°, haut. ${fmt1(state.altitude)}° · Champ ${fmt1(f.h)}° × ${fmt1(f.v)}° · ` +
       `Arc des filés ${fmt1(arc)}° · ${moon}`
-    el.focalOut.textContent = `${roundFocal(state.focalMm)} mm`
     const limit = allStars[state.starCount - 1][2]
-    el.starsOut.textContent = `${state.starCount.toLocaleString('fr-FR')} (magnitude ≤ ${fmt1(limit)})`
-    el.durationOut.textContent = `${state.durationMin} min`
+    el.starsOut.textContent = `(magnitude ≤ ${fmt1(limit)})`
+    // Les champs de saisie suivent les curseurs, sauf pendant qu'on y tape.
+    setNum(el.focalNum, Math.round(state.focalMm))
+    setNum(el.durationNum, state.durationMin)
+    setNum(el.starsNum, state.starCount)
+    setNum(el.eyeNum, state.eyeHeight)
+  }
+
+  function setNum(input: HTMLInputElement, value: number): void {
+    if (document.activeElement !== input) input.value = String(value)
   }
 
   function renderWarnings(): void {
@@ -272,6 +292,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.stars.max = String(Math.min(15000, allStars.length))
     el.stars.step = String(STAR_COUNT_STEP)
     el.stars.value = String(state.starCount)
+    el.eye.value = String(Math.round(sliderFromEye(state.eyeHeight) * 1000))
+    el.treesOn.setAttribute('aria-pressed', String(state.showTrees))
+    el.treesOff.setAttribute('aria-pressed', String(!state.showTrees))
     el.sensor.value = state.sensorId
     el.radius50.setAttribute('aria-pressed', String(state.radius === 50))
     el.radius150.setAttribute('aria-pressed', String(state.radius === 150))
@@ -307,6 +330,66 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     rememberSettings()
     renderHud()
     scheduleSky()
+  })
+
+  // Hauteur du point de vue : déplace seulement l'œil, la scène n'est pas recalculée.
+  const applyEyeHeight = () => {
+    rememberSettings()
+    placeEye()
+    showCoords()
+    draw()
+  }
+  el.eye.addEventListener('input', () => {
+    state.eyeHeight = clampEyeHeight(eyeFromSlider(Number(el.eye.value) / 1000))
+    applyEyeHeight()
+  })
+
+  // Arbres affichés ou masqués : la zone est reconstruite (depuis le cache disque).
+  const setTrees = (show: boolean) => {
+    if (state.showTrees === show) return
+    state.showTrees = show
+    rememberSettings()
+    syncInputs()
+    void loadBuildings(true)
+  }
+  el.treesOn.addEventListener('click', () => setTrees(true))
+  el.treesOff.addEventListener('click', () => setTrees(false))
+
+  // Saisie au clavier dans chaque champ : validée par Entrée ou en quittant le champ, bornée.
+  const bindNumber = (input: HTMLInputElement, apply: (value: number) => void) => {
+    input.addEventListener('change', () => {
+      const v = Number(input.value.replace(',', '.'))
+      if (Number.isFinite(v) && input.value.trim() !== '') apply(v)
+      input.blur()
+      syncInputs()
+      renderHud()
+    })
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        input.blur()
+        renderHud()
+      }
+    })
+  }
+  bindNumber(el.focalNum, (v) => {
+    state.focalMm = Math.min(FOCAL_MAX_MM, Math.max(FOCAL_MIN_MM, v))
+    rememberSettings()
+    draw()
+  })
+  bindNumber(el.durationNum, (v) => {
+    state.durationMin = Math.round(Math.min(DURATION_MAX, Math.max(DURATION_MIN, v)))
+    rememberSettings()
+    scheduleSky()
+  })
+  bindNumber(el.starsNum, (v) => {
+    const max = Math.min(15000, allStars.length)
+    state.starCount = Math.min(max, Math.max(STAR_COUNT_MIN, Math.round(v / STAR_COUNT_STEP) * STAR_COUNT_STEP))
+    rememberSettings()
+    scheduleSky()
+  })
+  bindNumber(el.eyeNum, (v) => {
+    state.eyeHeight = clampEyeHeight(v)
+    applyEyeHeight()
   })
   const setRadius = (r: SceneRadius) => {
     if (state.radius === r) return
@@ -436,7 +519,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   }).observe(el.stage)
 
   function showCoords(): void {
-    el.coords.textContent = `${state.observer.lat.toFixed(5)}° N, ${state.observer.lon.toFixed(5)}° E · œil à 1,70 m`
+    el.coords.textContent =
+      `${state.observer.lat.toFixed(5)}° N, ${state.observer.lon.toFixed(5)}° E · ` +
+      `œil à ${state.eyeHeight.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} m du sol`
   }
 
   // --- Relief et bâtiments ---
@@ -445,16 +530,17 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   let loading = false
   let terrainRequest = 0
 
-  /** Place l'œil au point courant, à 1,70 m au-dessus du sol de la scène chargée. */
+  /** Place l'œil au point courant, à la hauteur choisie au-dessus du sol de la scène chargée. */
   function placeEye(): void {
     if (!walk) {
-      scene.setEye(0, 0, 0)
+      // Sans relief chargé, le sol est à 1,70 m sous l'origine de la scène.
+      scene.setEye(0, state.eyeHeight - EYE_HEIGHT_M, 0, state.eyeHeight)
       return
     }
     const fallback = Number.isNaN(lastGround) ? walk.eyeAltitude - EYE_HEIGHT_M : lastGround
-    const eye = eyePosition(walk, state.observer.lat, state.observer.lon, fallback)
+    const eye = eyePosition(walk, state.observer.lat, state.observer.lon, fallback, state.eyeHeight)
     lastGround = eye.ground
-    scene.setEye(eye.x, eye.y, eye.z)
+    scene.setEye(eye.x, eye.y, eye.z, state.eyeHeight)
   }
 
   /**
@@ -472,7 +558,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     }
     el.terrain.textContent = 'Chargement des bâtiments et du relief (LiDAR HD)…'
     delete el.terrain.dataset.tone
-    const res = await loadTerrain(state.observer.lat, state.observer.lon, state.radius)
+    const res = await loadTerrain(state.observer.lat, state.observer.lon, state.radius, { trees: state.showTrees })
     if (id !== terrainRequest) return // une autre vue a été ouverte entre-temps
     loading = false
     if (res.status === 'error') {
@@ -508,7 +594,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     const f = localFrame(state.observer.lat, state.observer.lon)
     const tryMove = (e: number, n: number): boolean => {
       const p = fromLocal(f, e, n)
-      if (walk && isBlocked(walk, p.lat, p.lon)) return false
+      if (walk && isBlocked(walk, p.lat, p.lon, state.eyeHeight)) return false
       state.observer = { ...state.observer, lat: p.lat, lon: p.lon }
       return true
     }
