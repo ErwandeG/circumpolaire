@@ -7,8 +7,10 @@ import {
   cleanNoData,
   sceneExtent,
   type ElevationGrid,
-  type TerrainMesh
+  type TerrainMesh,
+  type WalkContext
 } from '../domain/terrain'
+import { localFrame } from '../domain/geo/local'
 import { fetchCached } from './cache'
 
 const WMS = 'https://data.geopf.fr/wms-r'
@@ -59,6 +61,8 @@ export type TerrainResult =
       lon: number
       movedM: number
       buildingCount: number
+      /** Sol et bâtiments pour se déplacer dans la scène sans la recharger. */
+      walk: WalkContext
     }
   | { status: 'error'; message: string }
 
@@ -80,7 +84,8 @@ export async function loadTerrain(lat: number, lon: number, radius = SCENE_RADIU
       lat: geo.lat,
       lon: geo.lon,
       movedM: moved.moved,
-      buildingCount: ext.touched.length
+      buildingCount: ext.touched.length,
+      walk: { frame: localFrame(geo.lat, geo.lon), eyeAltitude: mesh.eyeAltitude, mnt, buildings }
     }
   } catch (e) {
     const offline = e instanceof TypeError || (e instanceof DOMException && e.name === 'AbortError')

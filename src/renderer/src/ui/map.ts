@@ -3,7 +3,7 @@ import 'leaflet/dist/leaflet.css'
 import { zoomFor, type Place } from '../domain/place'
 
 /** Plan IGN v2, servi par la Géoplateforme en WMTS (gratuit, sans clé). */
-const PLAN_IGN_URL =
+export const PLAN_IGN_URL =
   'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
   '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM' +
   '&FORMAT=image/png&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}'

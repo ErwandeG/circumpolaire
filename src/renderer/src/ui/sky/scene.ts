@@ -195,6 +195,11 @@ export class SkyScene {
   private poleLabel = textSprite('Pôle', '#fca5a5', 11)
   private moonLabel = textSprite('Lune', '#fde68a')
   private moonGlow = glowSprite(34)
+  /**
+   * Tout ce qui est « à l'infini » (ciel, horizon, sol lointain) suit la caméra :
+   * se déplacer de quelques mètres ne doit pas décaler les étoiles, même à 600 mm.
+   */
+  private readonly sky = new THREE.Group()
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true })
@@ -202,6 +207,7 @@ export class SkyScene {
     this.scene.background = new THREE.Color(0x060b18)
     this.camera = new THREE.PerspectiveCamera(50, 1.5, 0.1, 50_000)
     this.camera.rotation.order = 'YXZ'
+    this.scene.add(this.sky)
 
     // Sol : disque sombre à 1,70 m sous l'œil.
     const ground = new THREE.Mesh(
@@ -210,7 +216,7 @@ export class SkyScene {
     )
     ground.rotation.x = -Math.PI / 2
     ground.position.y = -EYE_HEIGHT_M
-    this.scene.add(ground)
+    this.sky.add(ground)
 
     // Ligne d'horizon et points cardinaux.
     const horizonPts: THREE.Vector3[] = []
@@ -218,7 +224,7 @@ export class SkyScene {
       const a = (i * Math.PI) / 180
       horizonPts.push(new THREE.Vector3(Math.sin(a) * SKY_RADIUS, 0.5, -Math.cos(a) * SKY_RADIUS))
     }
-    this.scene.add(
+    this.sky.add(
       new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(horizonPts),
         new THREE.LineBasicMaterial({ color: 0x3b4a63 })
@@ -235,7 +241,7 @@ export class SkyScene {
       // Les points cardinaux passent derrière les bâtiments.
       s.material.depthTest = true
       this.labels.push(s)
-      this.scene.add(s)
+      this.sky.add(s)
     }
 
     // Lune : sphère éclairée par le Soleil, donc phase et orientation exactes.
@@ -244,14 +250,14 @@ export class SkyScene {
       new THREE.MeshStandardMaterial({ color: 0xe8e4d8, roughness: 1, metalness: 0 })
     )
     this.moonGroup.add(this.moonMesh)
-    this.scene.add(this.moonGroup)
-    this.scene.add(this.sun)
-    this.scene.add(this.sun.target)
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.04))
+    this.sky.add(this.moonGroup)
+    this.sky.add(this.sun)
+    this.sky.add(this.sun.target)
+    this.sky.add(new THREE.AmbientLight(0xffffff, 0.04))
 
     for (const s of [this.moonGlow, this.polarisRing, this.polarisLabel, this.poleMark, this.poleLabel, this.moonLabel]) {
       this.labels.push(s)
-      this.scene.add(s)
+      this.sky.add(s)
     }
   }
 
@@ -283,7 +289,7 @@ export class SkyScene {
         })
       )
       this.starPoints.frustumCulled = false
-      this.scene.add(this.starPoints)
+      this.sky.add(this.starPoints)
     }
     const sg = this.starPoints.geometry
     sg.setAttribute('position', new THREE.BufferAttribute(positions, 3))
@@ -325,7 +331,7 @@ export class SkyScene {
         })
       )
       this.trailLines.frustumCulled = false
-      this.scene.add(this.trailLines)
+      this.sky.add(this.trailLines)
     }
     const tg = this.trailLines.geometry
     tg.setAttribute('position', new THREE.BufferAttribute(linePos, 3))
@@ -359,7 +365,7 @@ export class SkyScene {
     this.moonGlow.material.opacity = 0.25 + 0.75 * c.moon.illuminatedFraction
 
     if (this.moonTrail) {
-      this.scene.remove(this.moonTrail)
+      this.sky.remove(this.moonTrail)
       this.moonTrail.geometry.dispose()
     }
     const trackPos = new Float32Array(c.moon.track.length * 3)
@@ -377,7 +383,7 @@ export class SkyScene {
       new THREE.ShaderMaterial({ vertexShader: linesVertex, fragmentShader: linesFragment, transparent: true, depthWrite: false })
     )
     this.moonTrail.frustumCulled = false
-    this.scene.add(this.moonTrail)
+    this.sky.add(this.moonTrail)
   }
 
   private terrain?: THREE.Mesh
@@ -430,6 +436,11 @@ export class SkyScene {
     this.camera.updateProjectionMatrix()
   }
 
+  /** Position de l'œil dans le repère de la scène chargée (mètres). */
+  setEye(x: number, y: number, z: number): void {
+    this.camera.position.set(x, y, z)
+  }
+
   setSize(width: number, height: number): void {
     this.renderer.setSize(width, height, false)
   }
@@ -438,6 +449,7 @@ export class SkyScene {
     // Étiquettes à taille constante en pixels, décalées à côté de leur repère.
     const h = this.renderer.domElement.clientHeight || 1
     const worldPerPx = (d: number) => (2 * d * Math.tan((this.camera.fov * Math.PI) / 360)) / h
+    this.sky.position.copy(this.camera.position)
     this.camera.updateMatrixWorld()
     const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0)
     const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1)

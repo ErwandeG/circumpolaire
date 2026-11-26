@@ -1,5 +1,6 @@
 import { bbox, contains, distanceToBuilding, fallbackHeight, type Building } from './geo/buildings'
-import { fromLambert93 } from './geo/lambert93'
+import { fromLambert93, toLambert93 } from './geo/lambert93'
+import { localFrame, toLocal, type LocalFrame } from './geo/local'
 
 /** Rayon de la scène autour de l'observateur (cahier des charges : 60 m, modifiable). */
 export const SCENE_RADIUS_M = 60
@@ -125,9 +126,7 @@ export function buildTerrain(
   const positions = new Float32Array(cols * rows * 3)
   const kinds = new Uint8Array(cols * rows)
   const groundRel = new Float32Array(cols * rows)
-  const lat0 = (observer.lat * Math.PI) / 180
-  const mPerDegLat = 111_132.954 - 559.822 * Math.cos(2 * lat0) + 1.175 * Math.cos(4 * lat0)
-  const mPerDegLon = (Math.PI / 180) * 6_378_137 * Math.cos(lat0) / Math.sqrt(1 - 0.00669438 * Math.sin(lat0) ** 2)
+  const frame = localFrame(observer.lat, observer.lon)
   let fallbackCells = 0
   let maskedCells = 0
 
@@ -158,15 +157,58 @@ export function buildTerrain(
         }
       }
       const g = fromLambert93(x, y)
-      positions[i * 3] = (g.lon - observer.lon) * mPerDegLon
+      const local = toLocal(frame, g.lat, g.lon)
+      positions[i * 3] = local.e
       positions[i * 3 + 1] = h - eyeAltitude
       groundRel[i] = ground - eyeAltitude
-      positions[i * 3 + 2] = -(g.lat - observer.lat) * mPerDegLat
+      positions[i * 3 + 2] = -local.n
       kinds[i] = kind
     }
   }
 
   return assembleMesh(positions, kinds, groundRel, cols, rows, fallbackCells, maskedCells, eyeAltitude)
+}
+
+/**
+ * Ce qu'il faut pour marcher dans une scène chargée : sol (MNT) et emprises de bâtiments.
+ * Origine du repère = point d'où la scène a été chargée.
+ */
+export interface WalkContext {
+  frame: LocalFrame
+  eyeAltitude: number
+  mnt: ElevationGrid
+  buildings: readonly Building[]
+}
+
+/** Altitude du sol (m) en un point, NaN hors de la zone chargée ou sans donnée. */
+export function groundAt(ctx: WalkContext, lat: number, lon: number): number {
+  const p = toLambert93(lat, lon)
+  const g = ctx.mnt
+  const inside =
+    p.x >= g.minX && p.x <= g.minX + g.cols * g.res && p.y <= g.maxY && p.y >= g.maxY - g.rows * g.res
+  return inside ? sample(g, p.x, p.y) : Number.NaN
+}
+
+/** Vrai si le point est dans un bâtiment : on ne traverse pas les façades. */
+export function isBlocked(ctx: WalkContext, lat: number, lon: number): boolean {
+  const p = toLambert93(lat, lon)
+  return ctx.buildings.some((b) => contains(b, p.x, p.y))
+}
+
+/**
+ * Position de l'œil dans le repère de la scène (x = Est, y = haut, z = Sud),
+ * à 1,70 m au-dessus du sol du point où l'on se trouve.
+ */
+export function eyePosition(
+  ctx: WalkContext,
+  lat: number,
+  lon: number,
+  lastGround: number
+): { x: number; y: number; z: number; ground: number } {
+  const local = toLocal(ctx.frame, lat, lon)
+  const g = groundAt(ctx, lat, lon)
+  const ground = Number.isNaN(g) ? lastGround : g
+  return { x: local.e, y: ground + EYE_HEIGHT_M - ctx.eyeAltitude, z: -local.n, ground }
 }
 
 /** Bas des cimes : 40 % de la hauteur de l'arbre, au plus 5 m au-dessus du sol. */

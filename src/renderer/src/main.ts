@@ -54,7 +54,11 @@ const sky = setupSkyView(
     landscape: byId('orient-landscape'),
     portrait: byId('orient-portrait'),
     date: byId('sky-date'),
-    time: byId('sky-time')
+    time: byId('sky-time'),
+    pad: byId('sky-pad'),
+    miniMapBox: byId('minimap-box'),
+    miniMap: byId('minimap'),
+    miniMapToggle: byId('minimap-toggle')
   },
   () => {
     mapEl.hidden = false

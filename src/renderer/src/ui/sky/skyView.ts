@@ -14,8 +14,13 @@ import {
   type FrameOrientation
 } from '../../domain/optics'
 import { formatParisTime, parisDayOf, parisTime, type CalendarDay } from '../../domain/time'
+import { distanceM, fromLocal, localFrame, stepToward } from '../../domain/geo/local'
+import { EYE_HEIGHT_M, eyePosition, isBlocked, type WalkContext } from '../../domain/terrain'
+import { checkPointInFrance } from '../../services/geocoding'
 import { loadTerrain } from '../../services/terrainService'
+import { createMiniMap } from './miniMap'
 import { SkyScene } from './scene'
+import { setupWalker } from './walker'
 
 export interface Observer {
   lat: number
@@ -45,6 +50,10 @@ interface SkyElements {
   portrait: HTMLButtonElement
   date: HTMLInputElement
   time: HTMLInputElement
+  pad: HTMLElement
+  miniMapBox: HTMLElement
+  miniMap: HTMLElement
+  miniMapToggle: HTMLButtonElement
 }
 
 export interface SkyView {
@@ -138,8 +147,15 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       scene.setView(state.azimuth, state.altitude, fov().v, fw / fh)
       scene.render()
       renderHud()
+      // La mini-carte suit sans être redessinée à chaque image.
+      const now = performance.now()
+      if (now - lastMiniMap > 80) {
+        lastMiniMap = now
+        miniMap.update(state.observer.lat, state.observer.lon, state.azimuth, fov().h)
+      }
     })
   }
+  let lastMiniMap = 0
 
   let skyPending = false
   function scheduleSky(): void {
@@ -258,7 +274,10 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
 
   // Glisser pour tourner : on « attrape » le ciel.
   let drag: { x: number; y: number; az: number; alt: number } | null = null
+  el.canvas.tabIndex = 0
   el.canvas.addEventListener('pointerdown', (e) => {
+    // Le focus quitte les curseurs : les flèches du clavier servent alors à marcher.
+    el.canvas.focus()
     drag = { x: e.clientX, y: e.clientY, az: state.azimuth, alt: state.altitude }
     el.canvas.setPointerCapture(e.pointerId)
   })
@@ -283,16 +302,44 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.coords.textContent = `${state.observer.lat.toFixed(5)}° N, ${state.observer.lon.toFixed(5)}° E · œil à 1,70 m`
   }
 
+  // --- Relief et bâtiments ---
+  let walk: WalkContext | null = null
+  let lastGround = Number.NaN
+  let loading = false
   let terrainRequest = 0
-  async function loadBuildings(): Promise<void> {
+
+  /** Place l'œil au point courant, à 1,70 m au-dessus du sol de la scène chargée. */
+  function placeEye(): void {
+    if (!walk) {
+      scene.setEye(0, 0, 0)
+      return
+    }
+    const fallback = Number.isNaN(lastGround) ? walk.eyeAltitude - EYE_HEIGHT_M : lastGround
+    const eye = eyePosition(walk, state.observer.lat, state.observer.lon, fallback)
+    lastGround = eye.ground
+    scene.setEye(eye.x, eye.y, eye.z)
+  }
+
+  /**
+   * Charge les bâtiments autour du point courant.
+   * keepCurrent : on garde la scène affichée pendant le chargement (déplacement à pied).
+   */
+  async function loadBuildings(keepCurrent: boolean): Promise<void> {
     const id = ++terrainRequest
-    scene.setTerrain(null)
+    loading = true
+    if (!keepCurrent) {
+      walk = null
+      lastGround = Number.NaN
+      scene.setTerrain(null)
+      placeEye()
+    }
     el.terrain.textContent = 'Chargement des bâtiments et du relief (LiDAR HD)…'
     delete el.terrain.dataset.tone
     const res = await loadTerrain(state.observer.lat, state.observer.lon)
     if (id !== terrainRequest) return // une autre vue a été ouverte entre-temps
+    loading = false
     if (res.status === 'error') {
-      el.terrain.textContent = `${res.message} Horizon plat.`
+      el.terrain.textContent = keepCurrent && walk ? `${res.message} Zone précédente conservée.` : `${res.message} Horizon plat.`
       el.terrain.dataset.tone = 'error'
       draw()
       return
@@ -301,16 +348,82 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     if (res.mesh.fallbackShare > 0.01) {
       parts.push(`${Math.round(res.mesh.fallbackShare * 100)} % sans LiDAR (volumes BD TOPO en orange)`)
     }
-    if (res.movedM > 0) {
+    if (res.movedM > 0 && !keepCurrent) {
       parts.push(`point déplacé de ${fmt1(res.movedM)} m pour sortir du bâtiment`)
       state.observer = { ...state.observer, lat: res.lat, lon: res.lon }
       showCoords()
       recomputeSky()
     }
     el.terrain.textContent = parts.join(' · ')
+    walk = res.walk
     scene.setTerrain(res.mesh)
+    miniMap.setZone(res.walk.frame.lat0, res.walk.frame.lon0)
+    placeEye()
     draw()
   }
+
+  // --- Déplacement à pied : 1 m/s, flèches de l'écran ou du clavier ---
+  /** Au-delà de cette distance du point de chargement, on recharge la zone en marchant. */
+  const RELOAD_DISTANCE_M = 30
+
+  function step(forward: number, right: number): void {
+    const d = stepToward(state.azimuth, forward, right)
+    const f = localFrame(state.observer.lat, state.observer.lon)
+    const tryMove = (e: number, n: number): boolean => {
+      const p = fromLocal(f, e, n)
+      if (walk && isBlocked(walk, p.lat, p.lon)) return false
+      state.observer = { ...state.observer, lat: p.lat, lon: p.lon }
+      return true
+    }
+    // Contre une façade, on glisse le long du mur sur l'axe resté libre.
+    if (!tryMove(d.e, d.n) && !tryMove(d.e, 0)) tryMove(0, d.n)
+    placeEye()
+    showCoords()
+    draw()
+    const origin = walk ? { lat: walk.frame.lat0, lon: walk.frame.lon0 } : null
+    if (origin && !loading && distanceM(origin, state.observer) > RELOAD_DISTANCE_M) void loadBuildings(true)
+  }
+
+  let stopTimer: ReturnType<typeof setTimeout> | undefined
+  function stopWalking(): void {
+    clearTimeout(stopTimer)
+    // À l'arrêt, on recharge la zone autour du nouveau point et on recalcule le ciel.
+    stopTimer = setTimeout(() => {
+      const origin = walk ? { lat: walk.frame.lat0, lon: walk.frame.lon0 } : null
+      if (!origin || distanceM(origin, state.observer) < 1) return
+      recomputeSky()
+      draw()
+      void loadBuildings(true)
+    }, 700)
+  }
+
+  setupWalker({
+    buttons: [...el.pad.querySelectorAll<HTMLButtonElement>('button[data-dir]')],
+    isActive: () => !el.root.hidden,
+    onStep: step,
+    onStop: stopWalking
+  })
+
+  // --- Mini-carte : où l'on est, ce que l'on vise ; un clic déplace le point de vue ---
+  async function moveTo(lat: number, lon: number): Promise<void> {
+    const check = await checkPointInFrance(lat, lon)
+    if (check.status === 'outside') {
+      el.terrain.textContent = 'Ce point est hors de France métropolitaine.'
+      el.terrain.dataset.tone = 'error'
+      return
+    }
+    state.observer = {
+      lat,
+      lon,
+      label: check.status === 'inside' && check.label ? `Près de ${check.label}` : 'Point choisi sur la carte'
+    }
+    el.place.textContent = state.observer.label
+    showCoords()
+    recomputeSky()
+    draw()
+    void loadBuildings(false)
+  }
+  const miniMap = createMiniMap(el.miniMapBox, el.miniMap, el.miniMapToggle, (lat, lon) => void moveTo(lat, lon))
 
   return {
     open(observer, night) {
@@ -325,7 +438,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       recomputeSky()
       aimAtPole()
       layout()
-      void loadBuildings()
+      miniMap.setZone(observer.lat, observer.lon)
+      miniMap.refresh(observer.lat, observer.lon)
+      void loadBuildings(false)
     }
   }
 }

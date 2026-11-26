@@ -83,6 +83,18 @@
               <div class="sky-cross" aria-hidden="true"></div>
               <div id="sky-hud" class="sky-hud"></div>
             </div>
+
+            <div id="sky-pad" class="sky-pad" role="group" aria-label="Se déplacer (1 m/s) — flèches du clavier aussi">
+              <button type="button" data-dir="forward" class="pad-up" title="Avancer (↑)" aria-label="Avancer">▲</button>
+              <button type="button" data-dir="left" class="pad-left" title="Pas de côté à gauche (←)" aria-label="Pas de côté à gauche">◀</button>
+              <button type="button" data-dir="right" class="pad-right" title="Pas de côté à droite (→)" aria-label="Pas de côté à droite">▶</button>
+              <button type="button" data-dir="back" class="pad-down" title="Reculer (↓)" aria-label="Reculer">▼</button>
+            </div>
+
+            <div id="minimap-box" class="minimap">
+              <button id="minimap-toggle" class="minimap-head" type="button" aria-expanded="true">Carte ▾</button>
+              <div id="minimap" class="minimap-map" aria-label="Carte du point de vue : cliquez pour vous y placer"></div>
+            </div>
           </div>
 
           <div id="sky-warnings" class="sky-warnings" role="status"></div>

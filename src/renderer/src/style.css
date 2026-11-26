@@ -431,6 +431,100 @@ body {
   grid-template-rows: auto 1fr auto auto auto;
 }
 
+/* Flèches de déplacement, en bas à gauche de la vue */
+.sky-pad {
+  position: absolute;
+  bottom: 46px;
+  left: 18px;
+  z-index: 5;
+  display: grid;
+  grid-template-areas:
+    '. up .'
+    'left . right'
+    '. down .';
+  grid-template-columns: repeat(3, 38px);
+  grid-template-rows: repeat(3, 38px);
+  gap: 3px;
+}
+
+.sky-pad button {
+  font-size: 14px;
+  color: #e6e9ed;
+  background: rgb(17 24 39 / 0.85);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.sky-pad button:hover {
+  background: rgb(30 41 59 / 0.95);
+}
+
+.sky-pad button.is-pressed {
+  color: #fff;
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.pad-up {
+  grid-area: up;
+}
+
+.pad-left {
+  grid-area: left;
+}
+
+.pad-right {
+  grid-area: right;
+}
+
+.pad-down {
+  grid-area: down;
+}
+
+/* Mini-carte repliable, en bas à droite de la vue */
+.minimap {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 5;
+  width: 280px;
+  overflow: hidden;
+  background: #0b1220;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.4);
+}
+
+.minimap-head {
+  display: block;
+  width: 100%;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  color: #cbd5e1;
+  background: #111827;
+  border: none;
+  cursor: pointer;
+}
+
+.minimap-map {
+  height: 220px;
+  cursor: crosshair;
+}
+
+.minimap.is-collapsed .minimap-map {
+  display: none;
+}
+
+.minimap.is-collapsed {
+  width: auto;
+}
+
 .sky-legend {
   margin-right: 10px;
   white-space: nowrap;
