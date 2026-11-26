@@ -16,7 +16,7 @@
     "dist:linux": "electron-vite build && electron-builder --linux AppImage deb --x64 --publish never"
   },
   "author": "ErwandeG",
-  "homepage": "https://github.com/ErwandeG/circumpolaire",
+  "homepage": "https://github.com/ErwandeG/star-trail-planner",
   "build": {
     "appId": "io.github.erwandeg.circumpolaire",
     "productName": "Star Trail Planner",
