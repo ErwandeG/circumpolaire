@@ -75,6 +75,7 @@ interface SkyElements {
   stars: HTMLInputElement
   starsNum: HTMLInputElement
   starsOut: HTMLOutputElement
+  starsLp: HTMLElement
   focalEq: HTMLOutputElement
   eye: HTMLInputElement
   eyeNum: HTMLInputElement
@@ -260,9 +261,14 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   // --- Textes ---
   function renderHud(): void {
     el.hud.textContent = hudLine(state, fov(), moonInfo)
-    el.starsOut.textContent = lp
-      ? `(magnitude ≤ ${fmt1(limitingMagnitude(visibleStarCount()))} : pollution lumineuse ${lp.name}, ciel à ${fmt1(lp.sqm)} mag/arcsec²)`
-      : `(magnitude ≤ ${fmt1(limitingMagnitude(state.starCount))})`
+    el.starsOut.textContent = `(magnitude ≤ ${fmt1(limitingMagnitude(visibleStarCount()))})`
+    // Détail de la pollution lumineuse, sous le curseur des étoiles.
+    el.starsLp.hidden = !lp
+    if (lp) {
+      el.starsLp.textContent =
+        `Pollution lumineuse ${lp.name} : ciel à ${fmt1(lp.sqm)} mag/arcsec², ` +
+        `étoiles visibles à l’œil nu jusqu’à la magnitude ${fmt1(lp.limit)}.`
+    }
     el.focalEq.textContent = focalEquivalentText(state)
     // Les champs de saisie suivent les curseurs, sauf pendant qu'on y tape.
     setNum(el.focalNum, Math.round(state.focalMm))

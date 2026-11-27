@@ -1148,3 +1148,15 @@ body {
 .lp-control .switch:not([aria-checked='true']) {
   background: #94a3b8;
 }
+
+/* Détail sous un réglage (pollution lumineuse sous le curseur des étoiles) */
+.ctrl-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #fbbf24;
+}
+
+.ctrl-note[hidden] {
+  display: none;
+}
