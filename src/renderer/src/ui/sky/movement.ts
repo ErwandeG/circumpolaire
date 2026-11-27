@@ -10,6 +10,12 @@ import type { SceneLoader } from './sceneLoader'
 import type { SkyState } from './skyState'
 import { setupWalker } from './walker'
 
+/**
+ * À l'arrêt de la marche, les volumes 3D ne sont rechargés que si l'on s'est éloigné d'au moins
+ * cette distance (horizontale) du point d'où ils ont été chargés : petits pas sans rechargement.
+ */
+export const RELOAD_MIN_DISTANCE_M = 10
+
 export interface MovementContext {
   state: SkyState
   loader: SceneLoader
@@ -53,10 +59,11 @@ export function setupMovement(ctx: MovementContext) {
   let stopTimer: ReturnType<typeof setTimeout> | undefined
   function stopWalking(): void {
     clearTimeout(stopTimer)
-    // À l'arrêt, on recharge la zone autour du nouveau point et on recalcule le ciel.
+    // À l'arrêt, on recharge la zone autour du nouveau point et on recalcule le ciel,
+    // sauf si l'on est resté à moins de 10 m du point de chargement.
     stopTimer = setTimeout(() => {
       const o = origin()
-      if (!o || distanceM(o, state.observer) < 1) return
+      if (!o || distanceM(o, state.observer) < RELOAD_MIN_DISTANCE_M) return
       ctx.recomputeSky()
       ctx.draw()
       void loader.loadBuildings(true)
