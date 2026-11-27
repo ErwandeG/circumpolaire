@@ -29,7 +29,8 @@ async function fetchGrid(
   minY: number,
   maxX: number,
   maxY: number,
-  res: number
+  res: number,
+  onProgress?: (fraction: number) => void
 ): Promise<ElevationGrid> {
   const cols = Math.round((maxX - minX) / res)
   const rows = Math.round((maxY - minY) / res)
@@ -37,7 +38,8 @@ async function fetchGrid(
     `${WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${LAYERS[layer]}&STYLES=` +
     `&CRS=EPSG:2154&BBOX=${minX},${minY},${maxX},${maxY}&WIDTH=${cols}&HEIGHT=${rows}` +
     `&FORMAT=image/x-bil;bits=32`
-  const buf = await fetchCached(url)
+  // Taille connue d'avance (flottants 32 bits) : l'avancement est exact même sans en-tête de taille.
+  const buf = await fetchCached(url, 30_000, onProgress && ((l, t) => onProgress(t ? l / t : 0)), cols * rows * 4)
   if (buf.byteLength !== cols * rows * 4) throw new Error(`Réponse ${layer} inattendue (${buf.byteLength} octets)`)
   const view = new DataView(buf)
   const values = new Float32Array(cols * rows)
@@ -49,7 +51,12 @@ async function fetchGrid(
 const WFS_PAGE = 1000
 const WFS_MAX_PAGES = 20
 
-async function fetchBuildings(x: number, y: number, radius: number): Promise<Building[]> {
+async function fetchBuildings(
+  x: number,
+  y: number,
+  radius: number,
+  onPage?: (page: number) => void
+): Promise<Building[]> {
   const r = radius + 5
   const base =
     `${WFS}?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=BDTOPO_V3:batiment` +
@@ -60,6 +67,7 @@ async function fetchBuildings(x: number, y: number, radius: number): Promise<Bui
     const buf = await fetchCached(`${base}&STARTINDEX=${page * WFS_PAGE}`)
     const json = JSON.parse(new TextDecoder().decode(buf)) as { features?: unknown[] }
     all.push(...parseBuildings(json))
+    onPage?.(page + 1)
     if (!Array.isArray(json.features) || json.features.length < WFS_PAGE) break
   }
   return all
@@ -85,22 +93,52 @@ export async function loadTerrain(
   lat: number,
   lon: number,
   radius: number = SCENE_RADIUS_M,
-  options: TerrainOptions & { hdBuildings?: boolean } = {}
+  options: TerrainOptions & {
+    hdBuildings?: boolean
+    /** Avancement de 0 à 1 et ce qui se charge (pour la barre de progression). */
+    onProgress?: (fraction: number, label: string, working?: boolean) => void
+  } = {}
 ): Promise<TerrainResult> {
+  const report = options.onProgress ?? (() => {})
   try {
     const p0 = toLambert93(lat, lon)
-    const buildings = await fetchBuildings(p0.x, p0.y, radius)
+    // Étapes pondérées : contours 0 → 15 %, grilles LiDAR (+ bâtiments HD) → 85 %, construction → 100 %.
+    report(0, 'Contours des bâtiments')
+    const buildings = await fetchBuildings(p0.x, p0.y, radius, (pages) =>
+      report(0.15 * (1 - 1 / (pages + 1)), `Contours des bâtiments (page ${pages})`)
+    )
     const moved = moveOutside(buildings, p0.x, p0.y)
     const geo = moved.moved > 0 ? fromLambert93(moved.x, moved.y) : { lat, lon }
     const ext = sceneExtent(moved.x, moved.y, buildings, radius)
     const res = gridResFor(radius)
+    const parts = { mns: 0, mnt: 0, hd: 0, hdText: '' }
+    const withHd = options.hdBuildings === true
+    const update = () => {
+      const grids = (parts.mns + parts.mnt) / 2
+      const f = withHd ? 0.15 + 0.35 * grids + 0.35 * parts.hd : 0.15 + 0.7 * grids
+      report(f, parts.hdText && grids >= 1 ? parts.hdText : `Relief et bâtiments LiDAR : ${Math.round(grids * 100)} %`)
+    }
+    update()
     const [mns, mnt, hd] = await Promise.all([
-      fetchGrid('mns', ext.minX, ext.minY, ext.maxX, ext.maxY, res),
-      fetchGrid('mnt', ext.minX, ext.minY, ext.maxX, ext.maxY, res),
+      fetchGrid('mns', ext.minX, ext.minY, ext.maxX, ext.maxY, res, (f) => {
+        parts.mns = f
+        update()
+      }),
+      fetchGrid('mnt', ext.minX, ext.minY, ext.maxX, ext.maxY, res, (f) => {
+        parts.mnt = f
+        update()
+      }),
       // Bâtiments HD (Strasbourg) : un échec n'empêche pas la vue, on garde alors les bâtiments reconstruits.
-      options.hdBuildings ? loadHdBuildings(geo.lat, geo.lon, radius).catch(() => null) : Promise.resolve(null)
+      withHd
+        ? loadHdBuildings(geo.lat, geo.lon, radius, (done, total) => {
+            parts.hd = total ? done / total : 0
+            parts.hdText = `Bâtiments HD : ${done} / ${total} fichiers`
+            update()
+          }).catch(() => null)
+        : Promise.resolve(null)
     ])
     // Construction dans une tâche de fond : l'interface ne se fige pas pendant le calcul.
+    report(0.85, 'Construction des volumes 3D', true)
     const mesh = await buildTerrainAsync({
       observer: { x: moved.x, y: moved.y, lat: geo.lat, lon: geo.lon },
       mns,

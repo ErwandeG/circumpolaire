@@ -175,13 +175,35 @@ const RETRY_DELAYS_MS = [1500, 4000]
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-async function fetchOnce(url: string, timeoutMs: number): Promise<ArrayBuffer> {
+/** Avancement d'un téléchargement : octets reçus et taille totale (0 si inconnue). */
+export type ByteProgress = (loaded: number, total: number) => void
+
+async function fetchOnce(url: string, timeoutMs: number, onProgress?: ByteProgress, expected = 0): Promise<ArrayBuffer> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(url, { signal: controller.signal })
     if (!res.ok) throw new HttpError(res.status)
-    return await res.arrayBuffer()
+    if (!onProgress || !res.body) return await res.arrayBuffer()
+    // Lecture morceau par morceau pour suivre l'avancement.
+    const total = Number(res.headers.get('content-length')) || expected
+    const reader = res.body.getReader()
+    const chunks: Uint8Array[] = []
+    let loaded = 0
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+      loaded += value.length
+      onProgress(loaded, total)
+    }
+    const out = new Uint8Array(loaded)
+    let o = 0
+    for (const c of chunks) {
+      out.set(c, o)
+      o += c.length
+    }
+    return out.buffer
   } finally {
     clearTimeout(timer)
   }
@@ -191,13 +213,22 @@ async function fetchOnce(url: string, timeoutMs: number): Promise<ArrayBuffer> {
  * Télécharge une ressource binaire, en passant par le cache.
  * Les pannes passagères (erreur 5xx, coupure réseau) sont réessayées deux fois ;
  * un délai dépassé ne l'est pas (le serveur est trop lent, réessayer doublerait l'attente).
+ * onProgress suit les octets reçus (`expected` : taille attendue si le serveur ne la donne pas).
  */
-export async function fetchCached(url: string, timeoutMs = 30_000): Promise<ArrayBuffer> {
+export async function fetchCached(
+  url: string,
+  timeoutMs = 30_000,
+  onProgress?: ByteProgress,
+  expected = 0
+): Promise<ArrayBuffer> {
   const hit = await cacheGet(url)
-  if (hit) return hit
+  if (hit) {
+    onProgress?.(hit.byteLength, hit.byteLength)
+    return hit
+  }
   for (let attempt = 0; ; attempt++) {
     try {
-      const buf = await fetchOnce(url, timeoutMs)
+      const buf = await fetchOnce(url, timeoutMs, onProgress, expected)
       void cachePut(url, buf)
       return buf
     } catch (e) {

@@ -788,7 +788,7 @@ body {
   color: #cbd5e1;
   background: rgb(11 18 32 / 0.85);
   border: 1px solid #334155;
-  border-radius: 999px;
+  border-radius: 12px;
   pointer-events: none;
 }
 
@@ -1159,4 +1159,73 @@ body {
 
 .ctrl-note[hidden] {
   display: none;
+}
+
+/* Barres de progression des chargements, en haut à droite de la vue */
+.busy-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 230px;
+  max-width: 320px;
+}
+
+.busy-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.busy-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress {
+  position: relative;
+  height: 5px;
+  overflow: hidden;
+  background: #1e293b;
+  border-radius: 999px;
+}
+
+.progress-bar {
+  width: 0;
+  height: 100%;
+  background: #60a5fa;
+  border-radius: 999px;
+  transition: width 0.2s ease-out;
+}
+
+/* Avancement inconnu : une bande qui glisse */
+.progress.is-indeterminate .progress-bar {
+  position: absolute;
+  width: 35%;
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  from {
+    left: -35%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+/* Calcul en cours (construction, horizon) : reflet qui parcourt la barre */
+.progress.is-working .progress-bar {
+  background: linear-gradient(90deg, #60a5fa 0%, #bfdbfe 50%, #60a5fa 100%);
+  background-size: 200% 100%;
+  animation: progress-shimmer 1s linear infinite;
+}
+
+@keyframes progress-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
 }

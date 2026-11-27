@@ -16,7 +16,8 @@ export interface LoaderContext {
   scene: SkyScene
   /** Ligne d'état sous le nom du lieu (bilan, erreurs). */
   status: HTMLElement
-  setBusy(key: string, label: string | null): void
+  /** Ligne de chargement : libellé, avancement de 0 à 1 (absent : inconnu), null pour l'effacer. */
+  setBusy(key: string, label: string | null, fraction?: number, working?: boolean): void
   draw(): void
   /** Le point a été déplacé (sortie d'un bâtiment) : coordonnées et ciel à recalculer. */
   onObserverMoved(): void
@@ -65,10 +66,13 @@ export function createSceneLoader(ctx: LoaderContext) {
     }
     status.textContent = 'Chargement des bâtiments et du relief (LiDAR HD)…'
     delete status.dataset.tone
-    ctx.setBusy('terrain', 'Bâtiments et relief proche')
+    ctx.setBusy('terrain', 'Bâtiments et relief proche', 0)
     const res = await loadTerrain(state.observer.lat, state.observer.lon, state.radius, {
       trees: state.showTrees,
-      hdBuildings: state.hdBuildings
+      hdBuildings: state.hdBuildings,
+      onProgress: (f, label, working) => {
+        if (id === terrainRequest) ctx.setBusy('terrain', label, f, working)
+      }
     })
     if (id !== terrainRequest) return // une autre vue a été ouverte entre-temps
     loading = false
@@ -110,10 +114,13 @@ export function createSceneLoader(ctx: LoaderContext) {
       ctx.draw()
       return
     }
-    ctx.setBusy('relief', 'Relief lointain')
+    ctx.setBusy('relief', 'Relief lointain', 0)
     const { lat, lon } = state.observer
     try {
-      const grids = await loadReliefGrids(lat, lon, state.reliefDistance)
+      const grids = await loadReliefGrids(lat, lon, state.reliefDistance, (done, total) => {
+        if (id === reliefRequest) ctx.setBusy('relief', `Relief lointain : grilles ${done} / ${total}`, 0.85 * (done / total))
+      })
+      if (id === reliefRequest) ctx.setBusy('relief', 'Relief lointain : calcul de l’horizon', 0.9, true)
       if (id !== reliefRequest) return
       const result = await computeHorizonAsync(grids, lat, lon, state.eyeHeight, state.radius, state.reliefDistance)
       if (id !== reliefRequest) return

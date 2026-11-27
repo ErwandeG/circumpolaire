@@ -53,7 +53,14 @@ async function inflate(data: Uint8Array): Promise<string> {
 }
 
 /** Triangles LoD2 d'une dalle, dans le repère des OBJ (CC48 décalé), depuis le cache ou le réseau. */
-async function tileTriangles(name: string, url: string): Promise<Float32Array> {
+/** Avancement des bâtiments HD : fichiers OBJ lus sur le total connu (les dalles en cache comptent d'emblée). */
+interface HdCounter {
+  done: number
+  total: number
+  report(): void
+}
+
+async function tileTriangles(name: string, url: string, counter?: HdCounter): Promise<Float32Array> {
   const hit = await cacheGet(CACHE_KEY + name)
   if (hit) return new Float32Array(hit)
 
@@ -80,6 +87,10 @@ async function tileTriangles(name: string, url: string): Promise<Float32Array> {
   if (!entries) throw new Error('Maquette 3D : sommaire de dalle illisible')
 
   const wanted = entries.filter((e) => LOD2.test(e.name))
+  if (counter) {
+    counter.total += wanted.length
+    counter.report()
+  }
   const parts: Float32Array[] = new Array(wanted.length)
   let next = 0
   async function worker(): Promise<void> {
@@ -91,6 +102,10 @@ async function tileTriangles(name: string, url: string): Promise<Float32Array> {
       const data = entryData(local, e)
       const text = e.method === 8 ? await inflate(data) : new TextDecoder().decode(data)
       parts[k] = parseObjTriangles(text)
+      if (counter) {
+        counter.done++
+        counter.report()
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(PARALLEL, wanted.length) }, worker))
@@ -108,7 +123,12 @@ async function tileTriangles(name: string, url: string): Promise<Float32Array> {
  * Bâtiments HD qui touchent le cercle de rayon `radius` autour du point.
  * null hors de la maquette (seule l'Eurométropole de Strasbourg est couverte).
  */
-export async function loadHdBuildings(lat: number, lon: number, radius: number): Promise<HdGeometry | null> {
+export async function loadHdBuildings(
+  lat: number,
+  lon: number,
+  radius: number,
+  onProgress?: (done: number, total: number) => void
+): Promise<HdGeometry | null> {
   // Dalles dont le centre est à moins du rayon plus une demi-diagonale de dalle.
   const reach = Math.ceil(radius + HD_TILE_M * 0.75)
   const url =
@@ -126,9 +146,10 @@ export async function loadHdBuildings(lat: number, lon: number, radius: number):
     const g = fromCC48(x, y)
     return toLambert93(g.lat, g.lon)
   }
+  const counter: HdCounter = { done: 0, total: 0, report: () => onProgress?.(counter.done, counter.total) }
   const loaded = await Promise.all(
     tiles.map(async (t) => {
-      const tri = await tileTriangles(t.dalle, t.url)
+      const tri = await tileTriangles(t.dalle, t.url, counter)
       const o = tileOrigin(t.dalle)
       const p0 = toL93(o.x, o.y)
       const px = toL93(o.x + HD_TILE_M, o.y)

@@ -47,12 +47,21 @@ async function fetchSurfaceRing(cx: number, cy: number, half: number, res: numbe
   }
 }
 
-async function fetchRaw(layer: string, minX: number, minY: number, maxX: number, maxY: number, cols: number, rows: number) {
+async function fetchRaw(
+  layer: string,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+  cols: number,
+  rows: number,
+  onBytes?: (loaded: number, total: number) => void
+) {
   const url =
     `${WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLES=` +
     `&CRS=EPSG:2154&BBOX=${minX},${minY},${maxX},${maxY}&WIDTH=${cols}&HEIGHT=${rows}` +
     `&FORMAT=image/x-bil;bits=32`
-  const buf = await fetchCached(url, 60_000)
+  const buf = await fetchCached(url, 60_000, onBytes, cols * rows * 4)
   if (buf.byteLength !== cols * rows * 4) throw new Error(`Relief : réponse inattendue (${buf.byteLength} octets)`)
   const view = new DataView(buf)
   const values = new Float32Array(cols * rows)
@@ -83,13 +92,27 @@ async function fetchRing(cx: number, cy: number, half: number, res: number): Pro
  * Grilles de relief nécessaires pour voir jusqu'à `distance` mètres, de la plus fine à la plus grossière :
  * d'abord la ceinture urbaine (MNS), puis les anneaux de sol nu (MNT).
  */
-export async function loadReliefGrids(lat: number, lon: number, distance: number): Promise<ReliefGrid[]> {
+export async function loadReliefGrids(
+  lat: number,
+  lon: number,
+  distance: number,
+  /** Grilles reçues sur le total (pour la barre de progression). */
+  onProgress?: (done: number, total: number) => void
+): Promise<ReliefGrid[]> {
   const p = toLambert93(lat, lon)
   const needed = RINGS.filter((_ring, i) => i === 0 || distance > RINGS[i - 1].half)
   const belt = URBAN_BELT.filter((_ring, i) => i === 0 || distance > URBAN_BELT[i - 1].half)
+  const total = needed.length + belt.length
+  let done = 0
+  onProgress?.(0, total)
+  const count = <T>(promise: Promise<T>) =>
+    promise.then((v) => {
+      onProgress?.(++done, total)
+      return v
+    })
   const [surface, bare] = await Promise.all([
-    Promise.all(belt.map((r) => fetchSurfaceRing(p.x, p.y, r.half, r.res))),
-    Promise.all(needed.map((r) => fetchRing(p.x, p.y, r.half, r.res)))
+    Promise.all(belt.map((r) => count(fetchSurfaceRing(p.x, p.y, r.half, r.res)))),
+    Promise.all(needed.map((r) => count(fetchRing(p.x, p.y, r.half, r.res))))
   ])
   return [...surface.filter((g): g is ReliefGrid => g !== null), ...bare]
 }

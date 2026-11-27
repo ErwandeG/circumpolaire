@@ -115,12 +115,30 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   const state = createSkyState(prefs, allStars.length)
 
   // --- Indicateur de chargement : visible tant qu'une tâche est en cours ---
-  const busyTasks = new Map<string, string>()
-  function setBusy(key: string, label: string | null): void {
-    if (label) busyTasks.set(key, label)
-    else busyTasks.delete(key)
-    el.busy.hidden = busyTasks.size === 0
-    el.busyText.textContent = [...busyTasks.values()].join(' · ')
+  // Une ligne par chargement : libellé et barre (avancement de 0 à 1, ou bande animée s'il est inconnu).
+  const busyRows = new Map<string, { label: string; fraction?: number; working?: boolean }>()
+  function setBusy(key: string, label: string | null, fraction?: number, working?: boolean): void {
+    if (label) busyRows.set(key, { label, fraction, working })
+    else busyRows.delete(key)
+    el.busy.hidden = busyRows.size === 0
+    el.busyText.replaceChildren(
+      ...[...busyRows.values()].map(({ label: text, fraction: f, working }) => {
+        const row = document.createElement('div')
+        row.className = 'busy-row'
+        const name = document.createElement('span')
+        name.className = 'busy-label'
+        name.textContent = f === undefined ? text : `${text} · ${Math.round(f * 100)} %`
+        const track = document.createElement('div')
+        // Calcul en cours sans avancement mesurable : la barre reste en place et scintille.
+        track.className = f === undefined ? 'progress is-indeterminate' : working ? 'progress is-working' : 'progress'
+        const bar = document.createElement('div')
+        bar.className = 'progress-bar'
+        if (f !== undefined) bar.style.width = `${Math.round(Math.min(1, Math.max(0, f)) * 100)}%`
+        track.append(bar)
+        row.append(name, track)
+        return row
+      })
+    )
   }
 
   // Les réglages sont enregistrés peu après chaque changement, pour le lancement suivant.
