@@ -6,7 +6,9 @@ import {
   entryData,
   parseObjTriangles,
   parseZipDirectory,
+  hdCovers,
   tileOrigin,
+  type HdTileFrame,
   type ZipEntry
 } from '../domain/hdModel'
 import { cacheGet, cachePut, fetchCached } from './cache'
@@ -24,6 +26,8 @@ export interface HdGeometry {
   anchorY: number
   /** Triangles : [x − anchorX, y − anchorY, altitude] à la suite, trois sommets par triangle. */
   triangles: Float32Array
+  /** Emprises des dalles qui ont des bâtiments HD. */
+  tiles: HdTileFrame[]
   /** Le point (Lambert 93) est-il dans une dalle qui a des bâtiments HD ? */
   covers(x: number, y: number): boolean
   tileCount: number
@@ -149,25 +153,20 @@ export async function loadHdBuildings(lat: number, lon: number, radius: number):
     }
   }
 
-  // Inverse des transformations affines : un point Lambert 93 est-il dans une dalle chargée ?
-  const inverses = withData.map((t) => {
-    const det = t.ax.x * t.ay.y - t.ay.x * t.ax.y
-    return { t, det }
-  })
+  const frames: HdTileFrame[] = withData.map((t) => ({
+    p0x: t.p0.x,
+    p0y: t.p0.y,
+    axx: t.ax.x,
+    axy: t.ax.y,
+    ayx: t.ay.x,
+    ayy: t.ay.y
+  }))
   return {
     anchorX: anchor.x,
     anchorY: anchor.y,
     triangles,
+    tiles: frames,
     tileCount: withData.length,
-    covers(x, y) {
-      for (const { t, det } of inverses) {
-        const rx = x - t.p0.x
-        const ry = y - t.p0.y
-        const u = (rx * t.ay.y - ry * t.ay.x) / det
-        const v = (t.ax.x * ry - t.ax.y * rx) / det
-        if (u >= 0 && u <= HD_TILE_M && v >= 0 && v <= HD_TILE_M) return true
-      }
-      return false
-    }
+    covers: (x, y) => hdCovers(frames, x, y)
   }
 }

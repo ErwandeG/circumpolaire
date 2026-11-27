@@ -96,3 +96,29 @@ export function tileOrigin(name: string): { x: number; y: number } {
   const [x, y] = name.split('_').map((s) => Number(s) / 1000)
   return { x, y }
 }
+
+/**
+ * Emprise d'une dalle en Lambert 93 : coin p0 et vecteurs d'un mètre le long des côtés de la dalle
+ * (transformation affine CC48 → Lambert 93). Données simples, transmissibles à une tâche de fond.
+ */
+export interface HdTileFrame {
+  p0x: number
+  p0y: number
+  axx: number
+  axy: number
+  ayx: number
+  ayy: number
+}
+
+/** Le point (Lambert 93) est-il dans l'une des dalles ? */
+export function hdCovers(tiles: readonly HdTileFrame[], x: number, y: number): boolean {
+  for (const t of tiles) {
+    const det = t.axx * t.ayy - t.ayx * t.axy
+    const rx = x - t.p0x
+    const ry = y - t.p0y
+    const u = (rx * t.ayy - ry * t.ayx) / det
+    const v = (t.axx * ry - t.axy * rx) / det
+    if (u >= 0 && u <= HD_TILE_M && v >= 0 && v <= HD_TILE_M) return true
+  }
+  return false
+}

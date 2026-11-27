@@ -2,7 +2,6 @@ import { moveOutside, parseBuildings, type Building } from '../domain/geo/buildi
 import { fromLambert93, toLambert93 } from '../domain/geo/lambert93'
 import {
   SCENE_RADIUS_M,
-  buildTerrain,
   gridResFor,
   cleanNoData,
   sceneExtent,
@@ -14,6 +13,7 @@ import {
 import { localFrame } from '../domain/geo/local'
 import { describeFetchError, fetchCached } from './cache'
 import { loadHdBuildings } from './hdService'
+import { buildTerrainAsync } from './terrainClient'
 
 const WMS = 'https://data.geopf.fr/wms-r'
 const WFS = 'https://data.geopf.fr/wfs/ows'
@@ -100,9 +100,15 @@ export async function loadTerrain(
       // Bâtiments HD (Strasbourg) : un échec n'empêche pas la vue, on garde alors les bâtiments reconstruits.
       options.hdBuildings ? loadHdBuildings(geo.lat, geo.lon, radius).catch(() => null) : Promise.resolve(null)
     ])
-    const mesh = buildTerrain({ x: moved.x, y: moved.y, lat: geo.lat, lon: geo.lon }, mns, mnt, buildings, radius, {
-      ...options,
-      hd: hd ?? undefined
+    // Construction dans une tâche de fond : l'interface ne se fige pas pendant le calcul.
+    const mesh = await buildTerrainAsync({
+      observer: { x: moved.x, y: moved.y, lat: geo.lat, lon: geo.lon },
+      mns,
+      mnt,
+      buildings,
+      radius,
+      trees: options.trees !== false,
+      hd: hd ? { anchorX: hd.anchorX, anchorY: hd.anchorY, triangles: hd.triangles, tiles: hd.tiles } : undefined
     })
     return {
       status: 'ok',
