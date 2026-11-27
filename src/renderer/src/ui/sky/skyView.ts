@@ -34,7 +34,13 @@ import {
   type WalkContext
 } from '../../domain/terrain'
 import { checkPointInFrance } from '../../services/geocoding'
-import { STAR_COUNT_MIN, STAR_COUNT_STEP, clampEyeHeight, clampReliefDistance } from '../../domain/preferences'
+import {
+  DEFAULT_PREFERENCES,
+  STAR_COUNT_MIN,
+  STAR_COUNT_STEP,
+  clampEyeHeight,
+  clampReliefDistance
+} from '../../domain/preferences'
 import { loadPreferences, savePreferences } from '../../services/storage'
 import { loadReliefGrids } from '../../services/reliefService'
 import { describeFetchError } from '../../services/cache'
@@ -75,6 +81,8 @@ interface SkyElements {
   focalEq: HTMLOutputElement
   eye: HTMLInputElement
   eyeNum: HTMLInputElement
+  roll: HTMLInputElement
+  rollNum: HTMLInputElement
   treesOn: HTMLButtonElement
   hdOn: HTMLButtonElement
   reliefOn: HTMLButtonElement
@@ -134,6 +142,8 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     orientation: prefs.orientation as FrameOrientation,
     azimuth: 0,
     altitude: 48.6,
+    /** Rotation tonneau du cadre (degrés), autour de l'axe de visée. */
+    roll: 0,
     starCount: Math.min(prefs.starCount, allStars.length),
     radius: prefs.radius as SceneRadius,
     miniMapCollapsed: prefs.miniMapCollapsed,
@@ -258,7 +268,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     requestAnimationFrame(() => {
       pending = false
       const { width: fw, height: fh } = frame()
-      scene.setView(state.azimuth, state.altitude, fov().v, fw / fh)
+      scene.setView(state.azimuth, state.altitude, fov().v, fw / fh, state.roll)
       scene.render()
       renderHud()
       // La mini-carte suit sans être redessinée à chaque image.
@@ -292,7 +302,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
         ? `Lune ${Math.round(moonInfo.fraction * 100)} %, à ${fmt1(moonInfo.altitude)}° de hauteur`
         : `Lune couchée (${Math.round(moonInfo.fraction * 100)} %)`
     el.hud.textContent =
-      `Visée az ${Math.round(az)}°, haut. ${fmt1(state.altitude)}° · Champ ${fmt1(f.h)}° × ${fmt1(f.v)}° · ` +
+      `Visée az ${Math.round(az)}°, haut. ${fmt1(state.altitude)}°${state.roll ? `, rotation ${fmt1(state.roll)}°` : ''} · Champ ${fmt1(f.h)}° × ${fmt1(f.v)}° · ` +
       `Arc des filés ${fmt1(arc)}° · ${moon}`
     const limit = allStars[state.starCount - 1][2]
     el.starsOut.textContent = `(magnitude ≤ ${fmt1(limit)})`
@@ -306,6 +316,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     setNum(el.durationNum, state.durationMin)
     setNum(el.starsNum, state.starCount)
     setNum(el.eyeNum, state.eyeHeight)
+    setNum(el.rollNum, state.roll)
     setNum(el.reliefDistNum, Math.round(state.reliefDistance / 100) / 10)
     el.panelSummary.textContent = settingsSummary()
   }
@@ -363,6 +374,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.stars.step = String(STAR_COUNT_STEP)
     el.stars.value = String(state.starCount)
     el.eye.value = String(Math.round(sliderFromEye(state.eyeHeight) * 1000))
+    el.roll.value = String(state.roll)
     el.treesOn.setAttribute('aria-checked', String(state.showTrees))
     el.hdOn.setAttribute('aria-checked', String(state.hdBuildings))
     el.reliefOn.setAttribute('aria-checked', String(state.reliefOn))
@@ -494,11 +506,40 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     state.eyeHeight = clampEyeHeight(v)
     applyEyeHeight()
   })
+  const setRoll = (deg: number) => {
+    state.roll = Math.round(Math.min(90, Math.max(-90, deg)) * 2) / 2
+    draw()
+  }
+  el.roll.addEventListener('input', () => setRoll(Number(el.roll.value)))
+  bindNumber(el.rollNum, setRoll)
   bindNumber(el.reliefDistNum, (km) => {
     state.reliefDistance = clampReliefDistance(km * 1000)
     rememberSettings()
     void loadRelief()
   })
+  // Clic sur le nom d'un curseur : retour à sa valeur par défaut (par le champ de saisie,
+  // qui applique la valeur avec ses bornes et ses effets).
+  const resets: [HTMLInputElement, HTMLInputElement, number, string][] = [
+    [el.focal, el.focalNum, DEFAULT_PREFERENCES.focalMm, `${DEFAULT_PREFERENCES.focalMm} mm`],
+    [el.duration, el.durationNum, DEFAULT_PREFERENCES.durationMin, `${DEFAULT_PREFERENCES.durationMin} min`],
+    [el.stars, el.starsNum, DEFAULT_PREFERENCES.starCount, `${DEFAULT_PREFERENCES.starCount} étoiles`],
+    [el.eye, el.eyeNum, DEFAULT_PREFERENCES.eyeHeight, `${String(DEFAULT_PREFERENCES.eyeHeight).replace('.', ',')} m`],
+    [el.roll, el.rollNum, 0, '0°'],
+    [el.reliefDist, el.reliefDistNum, DEFAULT_PREFERENCES.reliefDistanceM / 1000, `${DEFAULT_PREFERENCES.reliefDistanceM / 1000} km`]
+  ]
+  for (const [slider, num, value, text] of resets) {
+    const label = slider.closest('.ctrl')?.querySelector<HTMLElement>('label, .ctrl-label')
+    if (!label) continue
+    label.classList.add('resettable')
+    label.title = `Cliquer pour revenir à la valeur par défaut (${text})`
+    label.addEventListener('click', (e) => {
+      // Pas de focus sur le curseur (les flèches doivent rester au déplacement).
+      e.preventDefault()
+      num.value = String(value)
+      num.dispatchEvent(new Event('change'))
+    })
+  }
+
   const setRadius = (r: SceneRadius) => {
     if (state.radius === r) return
     state.radius = r
@@ -569,7 +610,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     scene.renderer.setPixelRatio(1)
     scene.setSize(w, h)
     scene.setPointScale(w / Math.max(1, el.canvas.clientWidth))
-    scene.setView(state.azimuth, state.altitude, fov().v, aspect)
+    scene.setView(state.azimuth, state.altitude, fov().v, aspect, state.roll)
     scene.render()
     const capture = composeCapture(el.canvas, captureInfo())
     scene.renderer.setPixelRatio(ratio)
@@ -598,6 +639,14 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   el.back.addEventListener('click', () => {
     el.root.hidden = true
     onClose()
+  })
+  // Échap : retour à la carte (sauf dans un champ de saisie, où Échap annule la saisie).
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || el.root.hidden) return
+    const t = e.target
+    if (t instanceof HTMLInputElement && t.type !== 'range' && t.type !== 'checkbox') return
+    if (t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement) return
+    el.back.click()
   })
 
   // Glisser pour tourner : on « attrape » le ciel.

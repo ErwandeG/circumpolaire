@@ -602,6 +602,15 @@ body {
   flex-shrink: 0;
 }
 
+.ctrl .resettable {
+  cursor: pointer;
+}
+
+.ctrl .resettable:hover {
+  color: #e6e9ed;
+  text-decoration: underline dotted;
+}
+
 .wip {
   margin-left: 4px;
   padding: 0 5px;

@@ -729,9 +729,11 @@ export class SkyScene {
   }
 
   /** Oriente la caméra : azimut et hauteur du centre du cadre, champ vertical, rapport largeur/hauteur. */
-  setView(azimuthDeg: number, altitudeDeg: number, vFovDeg: number, aspect: number): void {
+  setView(azimuthDeg: number, altitudeDeg: number, vFovDeg: number, aspect: number, rollDeg = 0): void {
     this.camera.rotation.y = (-azimuthDeg * Math.PI) / 180
     this.camera.rotation.x = (altitudeDeg * Math.PI) / 180
+    // Rotation tonneau autour de l'axe de visée : positif = image tournée dans le sens horaire.
+    this.camera.rotation.z = (rollDeg * Math.PI) / 180
     this.camera.fov = vFovDeg
     this.camera.aspect = aspect
     this.camera.updateProjectionMatrix()

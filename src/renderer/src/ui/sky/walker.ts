@@ -12,6 +12,11 @@ const KEYS: Record<string, Direction> = {
   ArrowDown: 'back',
   ArrowLeft: 'left',
   ArrowRight: 'right',
+  // Clavier AZERTY : Z Q S D comme les flèches (non indiqué dans l'aide).
+  z: 'forward',
+  s: 'back',
+  q: 'left',
+  d: 'right',
   // Codes physiques des touches (indépendants de la disposition du clavier).
   Space: 'up',
   ControlLeft: 'down'
@@ -73,7 +78,8 @@ export function setupWalker(opts: WalkerOptions): void {
     if (a instanceof HTMLInputElement) return a.type !== 'range' && a.type !== 'checkbox'
     return a instanceof HTMLSelectElement || a instanceof HTMLTextAreaElement
   }
-  const keyOf = (e: KeyboardEvent) => (e.key.startsWith('Arrow') ? e.key : e.code)
+  const keyOf = (e: KeyboardEvent) =>
+    e.key.startsWith('Arrow') ? e.key : e.key.length === 1 && /[zqsd]/i.test(e.key) ? e.key.toLowerCase() : e.code
 
   window.addEventListener('keydown', (e) => {
     fast = e.shiftKey

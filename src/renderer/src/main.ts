@@ -70,6 +70,8 @@ const sky = setupSkyView(
     focalEq: byId('focal-eq'),
     eye: byId('eye'),
     eyeNum: byId('eye-num'),
+    roll: byId('roll'),
+    rollNum: byId('roll-num'),
     treesOn: byId('trees-on'),
     hdOn: byId('hd-on'),
     reliefOn: byId('relief-on'),
