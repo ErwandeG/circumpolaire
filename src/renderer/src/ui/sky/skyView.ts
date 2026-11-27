@@ -1,39 +1,23 @@
-import starData from '../../data/stars.json'
 import { nightWindow } from '../../domain/astro/night'
-import { StarField, enuToAltAz, moonState, northCelestialPole, type StarRow } from '../../domain/astro/sky'
+import { enuToAltAz, moonState, northCelestialPole } from '../../domain/astro/sky'
 import {
   DURATION_MAX,
   DURATION_MIN,
   FOCAL_MAX_MM,
   FOCAL_MIN_MM,
   SENSORS,
-  SIDEREAL_DEG_PER_MIN,
-  cropFactor,
-  equivalentFocal,
   eyeFromSlider,
   fieldOfView,
   focalFromSlider,
   frameSize,
   reliefFromSlider,
-  roundFocal,
   sensorById,
   sliderFromEye,
   sliderFromFocal,
-  sliderFromRelief,
-  type FrameOrientation
+  sliderFromRelief
 } from '../../domain/optics'
 import { formatParisTime, parisDayOf, parisTime, type CalendarDay } from '../../domain/time'
-import { distanceM, fromLocal, localFrame, stepToward } from '../../domain/geo/local'
-import {
-  EYE_HEIGHT_M,
-  EYE_HEIGHT_MAX_M,
-  EYE_HEIGHT_MIN_M,
-  eyePosition,
-  isBlocked,
-  type SceneRadius,
-  type WalkContext
-} from '../../domain/terrain'
-import { checkPointInFrance } from '../../services/geocoding'
+import type { SceneRadius } from '../../domain/terrain'
 import {
   DEFAULT_PREFERENCES,
   STAR_COUNT_MIN,
@@ -42,20 +26,26 @@ import {
   clampReliefDistance
 } from '../../domain/preferences'
 import { loadPreferences, savePreferences } from '../../services/storage'
-import { loadReliefGrids } from '../../services/reliefService'
-import { describeFetchError } from '../../services/cache'
-import { loadTerrain } from '../../services/terrainService'
-import { computeHorizonAsync } from './horizonClient'
-import { EXPORT_LONG_SIDE_PX, composeCapture, saveCapture, type CaptureInfo } from './exportImage'
+import { EXPORT_LONG_SIDE_PX, composeCapture, saveCapture } from './exportImage'
 import { createMiniMap } from './miniMap'
 import { SkyScene } from './scene'
-import { setupWalker } from './walker'
+import { createSceneLoader } from './sceneLoader'
+import { setupMovement } from './movement'
+import { createSkyState, toPreferences, type Observer } from './skyState'
+import { allStars, limitingMagnitude, polarisIndex, starField, trailSamples } from './starCatalog'
+import {
+  captureFileName,
+  captureInfo,
+  exposureWarnings,
+  focalEquivalentText,
+  fmt1,
+  hudLine,
+  pad,
+  settingsSummary
+} from './skyText'
+import { bindNumber as bindNumberWith, setNum, setupResets } from './controls'
 
-export interface Observer {
-  lat: number
-  lon: number
-  label: string
-}
+export type { Observer } from './skyState'
 
 interface SkyElements {
   root: HTMLElement
@@ -110,50 +100,10 @@ export interface SkyView {
   open(observer: Observer, night: CalendarDay): void
 }
 
-/** Catalogue trié par éclat : afficher N étoiles = prendre les N premières. */
-const allStars = starData.stars as StarRow[]
-const fields = new Map<number, StarField>()
-function starField(count: number): StarField {
-  let f = fields.get(count)
-  if (!f) {
-    f = new StarField(allStars.slice(0, count))
-    fields.set(count, f)
-  }
-  return f
-}
-/** Nombre de points par filé : au plus ~400 000 sommets calculés, pour rester fluide à 15 000 étoiles. */
-function trailSamples(durationMin: number, count: number): number {
-  const wanted = Math.round(durationMin / 2) + 1
-  const budget = Math.floor(400_000 / count)
-  return Math.max(4, Math.min(61, wanted, budget))
-}
-const pad = (n: number) => String(n).padStart(2, '0')
-const fmt1 = (x: number) => x.toLocaleString('fr-FR', { maximumFractionDigits: 1 })
-
 export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   const scene = new SkyScene(el.canvas)
   const prefs = loadPreferences()
-  const state = {
-    observer: { lat: 48.5734, lon: 7.7521, label: 'Strasbourg' } as Observer,
-    start: new Date(),
-    durationMin: prefs.durationMin,
-    focalMm: prefs.focalMm,
-    sensorId: prefs.sensorId,
-    orientation: prefs.orientation as FrameOrientation,
-    azimuth: 0,
-    altitude: 48.6,
-    /** Rotation tonneau du cadre (degrés), autour de l'axe de visée. */
-    roll: 0,
-    starCount: Math.min(prefs.starCount, allStars.length),
-    radius: prefs.radius as SceneRadius,
-    miniMapCollapsed: prefs.miniMapCollapsed,
-    controlsCollapsed: prefs.controlsCollapsed,
-    eyeHeight: prefs.eyeHeight,
-    showTrees: prefs.showTrees,
-    hdBuildings: prefs.hdBuildings,
-    reliefOn: prefs.reliefOn,
-    reliefDistance: prefs.reliefDistanceM
-  }
+  const state = createSkyState(prefs, allStars.length)
 
   // --- Indicateur de chargement : visible tant qu'une tâche est en cours ---
   const busyTasks = new Map<string, string>()
@@ -168,25 +118,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   let saveTimer: ReturnType<typeof setTimeout> | undefined
   function rememberSettings(): void {
     clearTimeout(saveTimer)
-    saveTimer = setTimeout(
-      () =>
-        savePreferences({
-          focalMm: state.focalMm,
-          sensorId: state.sensorId,
-          durationMin: state.durationMin,
-          orientation: state.orientation,
-          starCount: state.starCount,
-          radius: state.radius,
-          miniMapCollapsed: state.miniMapCollapsed,
-          controlsCollapsed: state.controlsCollapsed,
-          eyeHeight: state.eyeHeight,
-          showTrees: state.showTrees,
-          hdBuildings: state.hdBuildings,
-          reliefOn: state.reliefOn,
-          reliefDistanceM: state.reliefDistance
-        }),
-      300
-    )
+    saveTimer = setTimeout(() => savePreferences(toPreferences(state)), 300)
   }
 
   for (const s of SENSORS) {
@@ -204,13 +136,6 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
 
   const sensor = () => sensorById(state.sensorId)
   const frame = () => frameSize(sensor(), state.orientation)
-  /** Focale réelle, et son équivalent plein format hors 24×36 : « 16 mm APS-C (≈ 25 mm éq. 24×36) ». */
-  const focalText = () => {
-    const s = sensor()
-    const f = Math.round(state.focalMm)
-    if (Math.abs(cropFactor(s) - 1) < 0.01) return `${f} mm plein format`
-    return `${f} mm ${s.short} (≈ ${Math.round(equivalentFocal(s, state.focalMm))} mm éq. 24×36)`
-  }
   const fov = () => ({
     h: fieldOfView(frame().width, state.focalMm),
     v: fieldOfView(frame().height, state.focalMm)
@@ -235,7 +160,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       starStart,
       trails,
       samples,
-      polarisIndex: starData.polarisIndex,
+      polarisIndex,
       pole: northCelestialPole(state.start, lat, lon),
       moon
     })
@@ -294,23 +219,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
 
   // --- Textes ---
   function renderHud(): void {
-    const f = fov()
-    const arc = state.durationMin * SIDEREAL_DEG_PER_MIN
-    const az = ((state.azimuth % 360) + 360) % 360
-    const moon =
-      moonInfo.altitude > 0
-        ? `Lune ${Math.round(moonInfo.fraction * 100)} %, à ${fmt1(moonInfo.altitude)}° de hauteur`
-        : `Lune couchée (${Math.round(moonInfo.fraction * 100)} %)`
-    el.hud.textContent =
-      `Visée az ${Math.round(az)}°, haut. ${fmt1(state.altitude)}°${state.roll ? `, rotation ${fmt1(state.roll)}°` : ''} · Champ ${fmt1(f.h)}° × ${fmt1(f.v)}° · ` +
-      `Arc des filés ${fmt1(arc)}° · ${moon}`
-    const limit = allStars[state.starCount - 1][2]
-    el.starsOut.textContent = `(magnitude ≤ ${fmt1(limit)})`
-    const crop = cropFactor(sensor())
-    el.focalEq.textContent =
-      Math.abs(crop - 1) < 0.01
-        ? ''
-        : `(≈ ${Math.round(equivalentFocal(sensor(), state.focalMm))} mm éq. 24×36, ×${crop.toLocaleString('fr-FR', { maximumFractionDigits: 2 })})`
+    el.hud.textContent = hudLine(state, fov(), moonInfo)
+    el.starsOut.textContent = `(magnitude ≤ ${fmt1(limitingMagnitude(state.starCount))})`
+    el.focalEq.textContent = focalEquivalentText(state)
     // Les champs de saisie suivent les curseurs, sauf pendant qu'on y tape.
     setNum(el.focalNum, Math.round(state.focalMm))
     setNum(el.durationNum, state.durationMin)
@@ -318,44 +229,12 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     setNum(el.eyeNum, state.eyeHeight)
     setNum(el.rollNum, state.roll)
     setNum(el.reliefDistNum, Math.round(state.reliefDistance / 100) / 10)
-    el.panelSummary.textContent = settingsSummary()
-  }
-
-  /** Réglages en une ligne, lisibles quand le panneau est replié. */
-  function settingsSummary(): string {
-    const nf = (x: number, digits = 1) => x.toLocaleString('fr-FR', { maximumFractionDigits: digits })
-    const parts = [
-      `${focalText()} ${state.orientation === 'portrait' ? 'portrait' : 'paysage'}`,
-      `${formatParisTime(state.start)}, pose ${state.durationMin} min`,
-      `${nf(state.starCount, 0)} étoiles`,
-      `œil à ${nf(state.eyeHeight)} m`,
-      `volumes ${state.radius} m`,
-      state.reliefOn ? `relief ${nf(state.reliefDistance / 1000)} km` : 'relief masqué'
-    ]
-    if (!state.showTrees) parts.push('arbres masqués')
-    return parts.join(' · ')
-  }
-
-  function setNum(input: HTMLInputElement, value: number): void {
-    if (document.activeElement !== input) input.value = String(value)
+    el.panelSummary.textContent = settingsSummary(state)
   }
 
   function renderWarnings(): void {
-    const { lat, lon } = state.observer
-    // La nuit du jour J va de midi J à midi J+1 (heure de Paris).
-    const nightDay = parisDayOf(new Date(state.start.getTime() - 12 * 3600_000))
-    const w = nightWindow(nightDay, lat, lon)
-    const end = new Date(state.start.getTime() + state.durationMin * 60_000)
-    const msgs: string[] = []
-    if (w.kind === 'none') {
-      msgs.push('Pas de nuit noire cette nuit-là : le Soleil ne descend pas sous −12°.')
-    } else {
-      const which = w.kind === 'astronomical' ? 'nuit astronomique' : 'nuit nautique'
-      if (state.start < w.start) msgs.push(`La pose commence avant le début de la ${which} (${formatParisTime(w.start)}).`)
-      if (end > w.end) msgs.push(`La pose se termine après la fin de la ${which} (${formatParisTime(w.end)}).`)
-    }
     el.warnings.replaceChildren(
-      ...msgs.map((m) => {
+      ...exposureWarnings(state).map((m) => {
         const p = document.createElement('p')
         p.className = 'sky-warning'
         p.textContent = `⚠ ${m}`
@@ -471,21 +350,11 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   })
 
   // Saisie au clavier dans chaque champ : validée par Entrée ou en quittant le champ, bornée.
-  const bindNumber = (input: HTMLInputElement, apply: (value: number) => void) => {
-    input.addEventListener('change', () => {
-      const v = Number(input.value.replace(',', '.'))
-      if (Number.isFinite(v) && input.value.trim() !== '') apply(v)
-      input.blur()
+  const bindNumber = (input: HTMLInputElement, apply: (value: number) => void) =>
+    bindNumberWith(input, apply, () => {
       syncInputs()
       renderHud()
     })
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        input.blur()
-        renderHud()
-      }
-    })
-  }
   bindNumber(el.focalNum, (v) => {
     state.focalMm = Math.min(FOCAL_MAX_MM, Math.max(FOCAL_MIN_MM, v))
     rememberSettings()
@@ -517,28 +386,15 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     rememberSettings()
     void loadRelief()
   })
-  // Clic sur le nom d'un curseur : retour à sa valeur par défaut (par le champ de saisie,
-  // qui applique la valeur avec ses bornes et ses effets).
-  const resets: [HTMLInputElement, HTMLInputElement, number, string][] = [
+  // Clic sur le nom d'un curseur : retour à sa valeur par défaut.
+  setupResets([
     [el.focal, el.focalNum, DEFAULT_PREFERENCES.focalMm, `${DEFAULT_PREFERENCES.focalMm} mm`],
     [el.duration, el.durationNum, DEFAULT_PREFERENCES.durationMin, `${DEFAULT_PREFERENCES.durationMin} min`],
     [el.stars, el.starsNum, DEFAULT_PREFERENCES.starCount, `${DEFAULT_PREFERENCES.starCount} étoiles`],
     [el.eye, el.eyeNum, DEFAULT_PREFERENCES.eyeHeight, `${String(DEFAULT_PREFERENCES.eyeHeight).replace('.', ',')} m`],
     [el.roll, el.rollNum, 0, '0°'],
     [el.reliefDist, el.reliefDistNum, DEFAULT_PREFERENCES.reliefDistanceM / 1000, `${DEFAULT_PREFERENCES.reliefDistanceM / 1000} km`]
-  ]
-  for (const [slider, num, value, text] of resets) {
-    const label = slider.closest('.ctrl')?.querySelector<HTMLElement>('label, .ctrl-label')
-    if (!label) continue
-    label.classList.add('resettable')
-    label.title = `Cliquer pour revenir à la valeur par défaut (${text})`
-    label.addEventListener('click', (e) => {
-      // Pas de focus sur le curseur (les flèches doivent rester au déplacement).
-      e.preventDefault()
-      num.value = String(value)
-      num.dispatchEvent(new Event('change'))
-    })
-  }
+  ])
 
   const setRadius = (r: SceneRadius) => {
     if (state.radius === r) return
@@ -575,31 +431,6 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   el.pole.addEventListener('click', aimAtPole)
 
   // --- Export de l'image du cadre ---
-  function captureInfo(): CaptureInfo {
-    const d = parisDayOf(state.start)
-    const f = fov()
-    const arc = state.durationMin * SIDEREAL_DEG_PER_MIN
-    const moon =
-      moonInfo.altitude > 0
-        ? `Lune ${Math.round(moonInfo.fraction * 100)} % à ${fmt1(moonInfo.altitude)}°`
-        : `Lune couchée (${Math.round(moonInfo.fraction * 100)} %)`
-    return {
-      place: state.observer.label,
-      when: `${pad(d.day)}/${pad(d.month)}/${d.year} à ${formatParisTime(state.start)} (heure de Paris)`,
-      settings:
-        `${focalText()}, ${state.orientation === 'landscape' ? 'paysage' : 'portrait'} · ` +
-        `champ ${fmt1(f.h)}° × ${fmt1(f.v)}° · pose ${state.durationMin} min (arc ${fmt1(arc)}°) · ` +
-        `visée az ${Math.round(((state.azimuth % 360) + 360) % 360)}°, haut. ${fmt1(state.altitude)}° · ${moon}`,
-      coords: `${state.observer.lat.toFixed(5)}° N, ${state.observer.lon.toFixed(5)}° E`
-    }
-  }
-
-  function captureFileName(): string {
-    const d = parisDayOf(state.start)
-    const t = formatParisTime(state.start).replace(':', '')
-    return `star-trail-planner-${d.year}${pad(d.month)}${pad(d.day)}-${t}-${roundFocal(state.focalMm)}mm.png`
-  }
-
   /** Rendu en haute définition (2 400 px sur le grand côté), puis retour à la taille d'écran. */
   function renderForExport(): HTMLCanvasElement {
     const { width: fw, height: fh } = frame()
@@ -612,7 +443,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     scene.setPointScale(w / Math.max(1, el.canvas.clientWidth))
     scene.setView(state.azimuth, state.altitude, fov().v, aspect, state.roll)
     scene.render()
-    const capture = composeCapture(el.canvas, captureInfo())
+    const capture = composeCapture(el.canvas, captureInfo(state, fov(), moonInfo))
     scene.renderer.setPixelRatio(ratio)
     scene.setPointScale(ratio)
     layout()
@@ -621,7 +452,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
 
   el.exportButton.addEventListener('click', async () => {
     try {
-      await saveCapture(renderForExport(), captureFileName())
+      await saveCapture(renderForExport(), captureFileName(state))
     } catch (e) {
       el.terrain.textContent = `Export impossible : ${(e as Error).message}`
       el.terrain.dataset.tone = 'error'
@@ -681,191 +512,43 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       `œil à ${state.eyeHeight.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} m du sol`
   }
 
-  // --- Relief et bâtiments ---
-  let walk: WalkContext | null = null
-  let lastGround = Number.NaN
-  let loading = false
-  let terrainRequest = 0
-  /** Dernier bilan du chargement des bâtiments, réaffiché quand une erreur de relief se résout. */
-  let terrainStatus = ''
-
-  /** Place l'œil au point courant, à la hauteur choisie au-dessus du sol de la scène chargée. */
-  function placeEye(): void {
-    if (!walk) {
-      // Sans relief chargé, le sol est à 1,70 m sous l'origine de la scène.
-      scene.setEye(0, state.eyeHeight - EYE_HEIGHT_M, 0, state.eyeHeight)
-      return
-    }
-    const fallback = Number.isNaN(lastGround) ? walk.eyeAltitude - EYE_HEIGHT_M : lastGround
-    const eye = eyePosition(walk, state.observer.lat, state.observer.lon, fallback, state.eyeHeight)
-    lastGround = eye.ground
-    scene.setEye(eye.x, eye.y, eye.z, state.eyeHeight)
-  }
-
-  /**
-   * Charge les bâtiments autour du point courant.
-   * keepCurrent : on garde la scène affichée pendant le chargement (déplacement à pied).
-   */
-  async function loadBuildings(keepCurrent: boolean): Promise<void> {
-    const id = ++terrainRequest
-    loading = true
-    if (!keepCurrent) {
-      walk = null
-      lastGround = Number.NaN
-      scene.setTerrain(null)
-      placeEye()
-    }
-    el.terrain.textContent = 'Chargement des bâtiments et du relief (LiDAR HD)…'
-    delete el.terrain.dataset.tone
-    setBusy('terrain', 'Bâtiments et relief proche')
-    const res = await loadTerrain(state.observer.lat, state.observer.lon, state.radius, { trees: state.showTrees, hdBuildings: state.hdBuildings })
-    if (id !== terrainRequest) return // une autre vue a été ouverte entre-temps
-    loading = false
-    setBusy('terrain', null)
-    if (res.status === 'error') {
-      el.terrain.textContent = keepCurrent && walk ? `${res.message} Zone précédente conservée.` : `${res.message} Horizon plat.`
-      el.terrain.dataset.tone = 'error'
-      draw()
-      void loadRelief()
-      return
-    }
-    const parts = [`${res.buildingCount} bâtiment${res.buildingCount > 1 ? 's' : ''} dans les ${state.radius} m`]
-    if (res.hdTiles > 0) parts.push(`bâtiments HD (${res.hdTiles} dalle${res.hdTiles > 1 ? 's' : ''})`)
-    if (res.mesh.fallbackShare > 0.01) {
-      parts.push(`${Math.round(res.mesh.fallbackShare * 100)} % sans LiDAR (volumes BD TOPO en orange)`)
-    }
-    if (res.movedM > 0 && !keepCurrent) {
-      parts.push(`point déplacé de ${fmt1(res.movedM)} m pour sortir du bâtiment`)
-      state.observer = { ...state.observer, lat: res.lat, lon: res.lon }
+  // --- Chargements : volumes 3D autour du point, puis relief lointain ---
+  const loader = createSceneLoader({
+    state,
+    scene,
+    status: el.terrain,
+    setBusy,
+    draw: () => draw(),
+    onObserverMoved: () => {
       showCoords()
       recomputeSky()
-    }
-    terrainStatus = parts.join(' · ')
-    el.terrain.textContent = terrainStatus
-    walk = res.walk
-    scene.setTerrain(res.mesh, state.radius)
-    miniMap.setZone(res.walk.frame.lat0, res.walk.frame.lon0, state.radius)
-    placeEye()
-    draw()
-    // Relief lointain ensuite, depuis la position finale (éventuellement sortie d'un bâtiment).
-    void loadRelief()
-  }
+    },
+    showZone: (lat, lon, radius) => miniMap.setZone(lat, lon, radius)
+  })
+  const { placeEye, loadBuildings, loadRelief, scheduleRelief } = loader
 
-  // --- Relief lointain : crêtes jusqu'à la distance choisie, au-delà de la scène détaillée ---
-  let reliefRequest = 0
-  const RELIEF_ERROR = 'Relief lointain indisponible'
-  async function loadRelief(): Promise<void> {
-    const id = ++reliefRequest
-    if (!state.reliefOn || state.reliefDistance <= state.radius) {
-      scene.setHorizon(null)
-      setBusy('relief', null)
-      draw()
-      return
-    }
-    setBusy('relief', 'Relief lointain')
-    const { lat, lon } = state.observer
-    try {
-      const grids = await loadReliefGrids(lat, lon, state.reliefDistance)
-      if (id !== reliefRequest) return
-      const result = await computeHorizonAsync(grids, lat, lon, state.eyeHeight, state.radius, state.reliefDistance)
-      if (id !== reliefRequest) return
-      scene.setHorizon(result)
-      // Une erreur de relief précédente n'a plus lieu d'être affichée.
-      if (el.terrain.textContent?.startsWith(RELIEF_ERROR)) {
-        el.terrain.textContent = terrainStatus
-        delete el.terrain.dataset.tone
-      }
-    } catch (e) {
-      if (id !== reliefRequest) return
-      el.terrain.textContent = describeFetchError(e, RELIEF_ERROR)
-      el.terrain.dataset.tone = 'error'
-    } finally {
-      if (id === reliefRequest) setBusy('relief', null)
-      draw()
-    }
-  }
-
-  let reliefTimer: ReturnType<typeof setTimeout> | undefined
-  /** Recalcul différé : on attend la fin du glissement du curseur. */
-  function scheduleRelief(): void {
-    clearTimeout(reliefTimer)
-    reliefTimer = setTimeout(() => void loadRelief(), 350)
-  }
-
-  // --- Déplacement à pied : 1 m/s, flèches de l'écran ou du clavier ---
-  /** Au-delà de la moitié du rayon depuis le point de chargement, on recharge la zone en marchant. */
-  const reloadDistance = () => state.radius / 2
-
-  function step(forward: number, right: number): void {
-    const d = stepToward(state.azimuth, forward, right)
-    const f = localFrame(state.observer.lat, state.observer.lon)
-    const tryMove = (e: number, n: number): boolean => {
-      const p = fromLocal(f, e, n)
-      if (walk && isBlocked(walk, p.lat, p.lon, state.eyeHeight)) return false
-      state.observer = { ...state.observer, lat: p.lat, lon: p.lon }
-      return true
-    }
-    // Contre une façade, on glisse le long du mur sur l'axe resté libre.
-    if (!tryMove(d.e, d.n) && !tryMove(d.e, 0)) tryMove(0, d.n)
-    placeEye()
-    showCoords()
-    draw()
-    const origin = walk ? { lat: walk.frame.lat0, lon: walk.frame.lon0 } : null
-    if (origin && !loading && distanceM(origin, state.observer) > reloadDistance()) void loadBuildings(true)
-  }
-
-  let stopTimer: ReturnType<typeof setTimeout> | undefined
-  function stopWalking(): void {
-    clearTimeout(stopTimer)
-    // À l'arrêt, on recharge la zone autour du nouveau point et on recalcule le ciel.
-    stopTimer = setTimeout(() => {
-      const origin = walk ? { lat: walk.frame.lat0, lon: walk.frame.lon0 } : null
-      if (!origin || distanceM(origin, state.observer) < 1) return
-      recomputeSky()
-      draw()
-      void loadBuildings(true)
-    }, 700)
-  }
-
-  // Hauteur au clavier : valeur exacte cumulée (le réglage est arrondi au centimètre),
-  // bornée comme le curseur.
-  let eyeExact = state.eyeHeight
-  function rise(upM: number): void {
-    if (Math.abs(eyeExact - state.eyeHeight) > 0.01) eyeExact = state.eyeHeight
-    eyeExact = Math.min(EYE_HEIGHT_MAX_M, Math.max(EYE_HEIGHT_MIN_M, eyeExact + upM))
-    const h = clampEyeHeight(eyeExact)
-    if (h === state.eyeHeight) return
-    state.eyeHeight = h
-    syncInputs()
-    applyEyeHeight()
-  }
-
-  setupWalker({
+  // --- Déplacement : marche et hauteur au clavier, saut vers un point de la mini-carte ---
+  const { moveTo } = setupMovement({
+    state,
+    loader,
     isActive: () => !el.root.hidden,
-    onStep: step,
-    onRise: rise,
-    onStop: stopWalking
+    draw: () => draw(),
+    showCoords,
+    recomputeSky,
+    onEyeHeight: () => {
+      syncInputs()
+      applyEyeHeight()
+    },
+    showPlace: (label) => {
+      el.place.textContent = label
+    },
+    showError: (message) => {
+      el.terrain.textContent = message
+      el.terrain.dataset.tone = 'error'
+    }
   })
 
   // --- Mini-carte : où l'on est, ce que l'on vise ; un clic déplace le point de vue ---
-  async function moveTo(lat: number, lon: number): Promise<void> {
-    const check = await checkPointInFrance(lat, lon)
-    if (check.status === 'outside') {
-      el.terrain.textContent = 'Ce point est hors de France métropolitaine.'
-      el.terrain.dataset.tone = 'error'
-      return
-    }
-    state.observer = {
-      lat,
-      lon,
-      label: check.status === 'inside' && check.label ? `Près de ${check.label}` : 'Point choisi sur la carte'
-    }
-    el.place.textContent = state.observer.label
-    showCoords()
-    recomputeSky()
-    draw()
-    void loadBuildings(false)
-  }
   const miniMap = createMiniMap(
     el.miniMapBox,
     el.miniMap,
