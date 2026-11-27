@@ -1,9 +1,21 @@
 /**
  * Cache disque des réponses (IndexedDB) : une zone déjà chargée ne repart pas sur le réseau.
- * Tout échec du cache est silencieux : on retombe sur le réseau.
+ * Taille bornée : au-delà de CACHE_LIMIT_BYTES, les réponses inutilisées depuis le plus longtemps
+ * sont supprimées. Tout échec du cache est silencieux : on retombe sur le réseau.
  */
 const DB_NAME = 'circumpolaire'
 const STORE = 'responses'
+/** Taille et dernière utilisation de chaque réponse, pour choisir quoi supprimer. */
+const META = 'meta'
+export const CACHE_LIMIT_BYTES = 1_000_000_000
+/** Après un nettoyage, on redescend à 80 % de la limite pour ne pas nettoyer à chaque ajout. */
+const CACHE_TARGET = 0.8
+
+interface Meta {
+  size: number
+  /** Dernière utilisation (ms depuis 1970) ; 0 pour les réponses d'avant ce suivi. */
+  t: number
+}
 
 let dbPromise: Promise<IDBDatabase | null> | null = null
 
@@ -11,8 +23,26 @@ function openDb(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise
   dbPromise = new Promise((resolve) => {
     try {
-      const req = indexedDB.open(DB_NAME, 1)
-      req.onupgradeneeded = () => req.result.createObjectStore(STORE)
+      const req = indexedDB.open(DB_NAME, 2)
+      req.onupgradeneeded = (e) => {
+        const db = req.result
+        if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE)
+        if (!db.objectStoreNames.contains(META)) {
+          const meta = db.createObjectStore(META)
+          meta.createIndex('t', 't')
+          // Réponses déjà en cache (version 1) : comptées, et premières à partir si besoin.
+          if (e.oldVersion >= 1) {
+            const tx = req.transaction!
+            tx.objectStore(STORE).openCursor().onsuccess = (ev) => {
+              const cur = (ev.target as IDBRequest<IDBCursorWithValue | null>).result
+              if (!cur) return
+              const size = cur.value instanceof ArrayBuffer ? cur.value.byteLength : 0
+              tx.objectStore(META).put({ size, t: 0 } satisfies Meta, cur.key)
+              cur.continue()
+            }
+          }
+        }
+      }
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => resolve(null)
     } catch {
@@ -27,8 +57,14 @@ export async function cacheGet(key: string): Promise<ArrayBuffer | null> {
   if (!db) return null
   return new Promise((resolve) => {
     try {
-      const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(key)
-      req.onsuccess = () => resolve(req.result instanceof ArrayBuffer ? req.result : null)
+      const tx = db.transaction([STORE, META], 'readwrite')
+      const req = tx.objectStore(STORE).get(key)
+      req.onsuccess = () => {
+        const value = req.result instanceof ArrayBuffer ? req.result : null
+        // Utilisée à l'instant : elle passe en dernier dans l'ordre de suppression.
+        if (value) tx.objectStore(META).put({ size: value.byteLength, t: Date.now() } satisfies Meta, key)
+        resolve(value)
+      }
       req.onerror = () => resolve(null)
     } catch {
       resolve(null)
@@ -41,8 +77,82 @@ export async function cachePut(key: string, value: ArrayBuffer): Promise<void> {
   if (!db) return
   await new Promise<void>((resolve) => {
     try {
-      const tx = db.transaction(STORE, 'readwrite')
+      const tx = db.transaction([STORE, META], 'readwrite')
       tx.objectStore(STORE).put(value, key)
+      tx.objectStore(META).put({ size: value.byteLength, t: Date.now() } satisfies Meta, key)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => resolve()
+    } catch {
+      resolve()
+    }
+  })
+  scheduleTrim()
+}
+
+let trimTimer: ReturnType<typeof setTimeout> | undefined
+function scheduleTrim(): void {
+  clearTimeout(trimTimer)
+  trimTimer = setTimeout(() => void trimCache(), 2000)
+}
+
+/** Supprime les réponses les moins récemment utilisées tant que le cache dépasse la limite. */
+export async function trimCache(limit = CACHE_LIMIT_BYTES): Promise<void> {
+  const { bytes } = await cacheStats()
+  if (bytes <= limit) return
+  const db = await openDb()
+  if (!db) return
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction([STORE, META], 'readwrite')
+      let total = bytes
+      tx.objectStore(META).index('t').openCursor().onsuccess = (ev) => {
+        const cur = (ev.target as IDBRequest<IDBCursorWithValue | null>).result
+        if (!cur || total <= limit * CACHE_TARGET) return
+        total -= (cur.value as Meta).size
+        tx.objectStore(STORE).delete(cur.primaryKey)
+        cur.delete()
+        cur.continue()
+      }
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => resolve()
+    } catch {
+      resolve()
+    }
+  })
+}
+
+/** Taille totale du cache (octets) et nombre de réponses. */
+export async function cacheStats(): Promise<{ bytes: number; entries: number }> {
+  const db = await openDb()
+  if (!db) return { bytes: 0, entries: 0 }
+  return new Promise((resolve) => {
+    let bytes = 0
+    let entries = 0
+    try {
+      const req = db.transaction(META, 'readonly').objectStore(META).openCursor()
+      req.onsuccess = () => {
+        const cur = req.result
+        if (!cur) return resolve({ bytes, entries })
+        bytes += (cur.value as Meta).size
+        entries++
+        cur.continue()
+      }
+      req.onerror = () => resolve({ bytes, entries })
+    } catch {
+      resolve({ bytes, entries })
+    }
+  })
+}
+
+/** Vide entièrement le cache. */
+export async function cacheClear(): Promise<void> {
+  const db = await openDb()
+  if (!db) return
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction([STORE, META], 'readwrite')
+      tx.objectStore(STORE).clear()
+      tx.objectStore(META).clear()
       tx.oncomplete = () => resolve()
       tx.onerror = () => resolve()
     } catch {

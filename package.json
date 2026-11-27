@@ -20,6 +20,10 @@
   "build": {
     "appId": "io.github.erwandeg.circumpolaire",
     "productName": "Star Trail Planner",
+    "electronLanguages": [
+      "fr",
+      "en-US"
+    ],
     "directories": {
       "output": "dist"
     },

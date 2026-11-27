@@ -8,6 +8,7 @@ import { createMap } from './ui/map'
 import { setupSearch } from './ui/search'
 import { setupSkyView, type Observer } from './ui/sky/skyView'
 import { setupSidebar } from './ui/sidebar'
+import { cacheClear, cacheStats } from './services/cache'
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id)
@@ -101,7 +102,23 @@ const sky = setupSkyView(
   }
 )
 
+// --- Cache disque : taille affichée dans l'onglet Réglages, bouton pour le vider ---
+const cacheSize = byId('cache-size')
+const formatBytes = (b: number) =>
+  b >= 1e9 ? `${(b / 1e9).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go` : `${Math.round(b / 1e6)} Mo`
+async function showCacheSize(): Promise<void> {
+  cacheSize.textContent = formatBytes((await cacheStats()).bytes)
+}
+byId('cache-clear').addEventListener('click', async () => {
+  const { bytes } = await cacheStats()
+  if (!window.confirm(`Vider le cache (${formatBytes(bytes)}) ? Les zones déjà vues seront de nouveau téléchargées.`)) return
+  await cacheClear()
+  void showCacheSize()
+})
+byId('tab-settings').addEventListener('click', () => void showCacheSize())
+
 function openSky(observer: Observer, night: CalendarDay): void {
+  void showCacheSize()
   mapEl.hidden = true
   mapHint.hidden = true
   sidebar.setSkyMode(true)
