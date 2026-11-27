@@ -51,6 +51,7 @@ Code sous licence [MIT](LICENSE). Données tierces, sous leur propre licence :
 
 - catalogue d'étoiles `src/renderer/src/data/stars.json` : base HYG v4.1, licence CC BY-SA 4.0 ;
 - fond de carte, adresses, LiDAR HD, BD TOPO et MNT RGE ALTI : IGN, chargés en ligne depuis la Géoplateforme (licence Etalab 2.0) ;
+- pollution lumineuse : [atlas de David Lorenz](https://djlorenz.github.io/astronomy/lp/) (2025, d'après les données satellite VIIRS), réduit à la France (`src/renderer/src/data/lightpollution-fr*.png`) ; aucune licence n'est indiquée sur le site de l'auteur, son accord est à obtenir avant toute diffusion large ;
 - bâtiments HD (WIP, Strasbourg) : [maquette 3D 2022 de l'Eurométropole de Strasbourg](https://data.strasbourg.eu/explore/dataset/odata3d_maquette_2022/), licence Etalab 2.0 ; seule la géométrie LoD2 (OBJ) est lue, par lecture partielle des archives (`src/renderer/src/services/hdService.ts`).
 
 ## Avancement

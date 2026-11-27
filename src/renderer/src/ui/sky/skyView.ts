@@ -30,6 +30,8 @@ import { EXPORT_LONG_SIDE_PX, composeCapture, saveCapture } from './exportImage'
 import { createMiniMap } from './miniMap'
 import { SkyScene } from './scene'
 import { createSceneLoader } from './sceneLoader'
+import { skyQuality, type SkyQuality } from '../../domain/lightPollution'
+import { isLightPollutionOn, lightPollutionLevel, onLightPollutionChange } from '../../services/lightPollutionMap'
 import { setupMovement } from './movement'
 import { createSkyState, toPreferences, type Observer } from './skyState'
 import { allStars, limitingMagnitude, polarisIndex, starField, trailSamples } from './starCatalog'
@@ -141,13 +143,40 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     v: fieldOfView(frame().height, state.focalMm)
   })
 
+  // --- Pollution lumineuse du lieu (interrupteur de la carte principale) ---
+  let lp: SkyQuality | null = null
+  /** Étoiles affichées : le réglage, limité par la magnitude visible sous le ciel du lieu. */
+  function visibleStarCount(): number {
+    if (!lp) return state.starCount
+    let lo = 0
+    let hi = state.starCount
+    // Catalogue trié par éclat : première étoile plus faible que la limite.
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (allStars[mid][2] <= lp.limit) lo = mid + 1
+      else hi = mid
+    }
+    return Math.max(1, lo)
+  }
+  async function updateLightPollution(): Promise<void> {
+    const { lat, lon } = state.observer
+    const level = isLightPollutionOn() ? await lightPollutionLevel(lat, lon) : null
+    lp = level === null ? null : skyQuality(level)
+    scene.setSkyGlow(lp?.glow ?? 0)
+    recomputeSky()
+    draw()
+  }
+  onLightPollutionChange(() => void updateLightPollution())
+
   // --- Calculs du ciel (seulement quand le lieu, l'heure ou la durée changent) ---
   let moonInfo = { fraction: 0, altitude: 0, azimuth: 0 }
   function recomputeSky(): void {
     const { lat, lon } = state.observer
-    const field = starField(state.starCount)
-    const stars = allStars.slice(0, state.starCount)
-    const samples = trailSamples(state.durationMin, state.starCount)
+    // Pollution lumineuse : les étoiles plus faibles que la magnitude limite du lieu disparaissent.
+    const count = visibleStarCount()
+    const field = starField(count)
+    const stars = allStars.slice(0, count)
+    const samples = trailSamples(state.durationMin, count)
     const starStart = field.trails(state.start, 0, 1, lat, lon)
     const trails = field.trails(state.start, state.durationMin, samples, lat, lon)
     const moon = moonState(state.start, state.durationMin, Math.min(samples, 25), lat, lon)
@@ -220,7 +249,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   // --- Textes ---
   function renderHud(): void {
     el.hud.textContent = hudLine(state, fov(), moonInfo)
-    el.starsOut.textContent = `(magnitude ≤ ${fmt1(limitingMagnitude(state.starCount))})`
+    el.starsOut.textContent = lp
+      ? `(magnitude ≤ ${fmt1(limitingMagnitude(visibleStarCount()))} : pollution lumineuse ${lp.name}, ciel à ${fmt1(lp.sqm)} mag/arcsec²)`
+      : `(magnitude ≤ ${fmt1(limitingMagnitude(state.starCount))})`
     el.focalEq.textContent = focalEquivalentText(state)
     // Les champs de saisie suivent les curseurs, sauf pendant qu'on y tape.
     setNum(el.focalNum, Math.round(state.focalMm))
@@ -520,6 +551,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     setBusy,
     draw: () => draw(),
     onObserverMoved: () => {
+      void updateLightPollution()
       showCoords()
       recomputeSky()
     },
@@ -540,6 +572,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       applyEyeHeight()
     },
     showPlace: (label) => {
+      void updateLightPollution()
       el.place.textContent = label
     },
     showError: (message) => {
@@ -594,6 +627,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       miniMap.setZone(observer.lat, observer.lon, state.radius)
       miniMap.refresh(observer.lat, observer.lon)
       void loadBuildings(false)
+      void updateLightPollution()
     }
   }
 }

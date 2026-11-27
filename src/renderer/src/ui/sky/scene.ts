@@ -49,11 +49,18 @@ const skyVertex = /* glsl */ `
 const skyFragment = /* glsl */ `
   uniform vec3 zenith;
   uniform vec3 horizon;
+  uniform float glow;
   varying float vUp;
   void main() {
     // Lueur des villes : forte au ras de l'horizon, éteinte vers 20° de hauteur.
     float t = smoothstep(-0.02, 0.34, vUp);
-    gl_FragColor = vec4(mix(horizon, zenith, t), 1.0);
+    vec3 col = mix(horizon, zenith, t);
+    // Pollution lumineuse du lieu : halo jaune orangé qui monte de 10° (ciel peu pollué)
+    // à 40° (centre-ville) au-dessus de l'horizon, et ciel un peu éclairci jusqu'au zénith.
+    float top = 0.17 + 0.47 * glow;
+    float g = glow * (1.0 - smoothstep(-0.05, top, vUp));
+    col += vec3(0.32, 0.24, 0.10) * g + vec3(0.035, 0.03, 0.02) * glow;
+    gl_FragColor = vec4(col, 1.0);
   }
 `
 const reliefVertex = /* glsl */ `
@@ -286,13 +293,15 @@ export class SkyScene {
         fragmentShader: skyFragment,
         uniforms: {
           zenith: { value: new THREE.Vector3(...SKY_ZENITH) },
-          horizon: { value: new THREE.Vector3(...SKY_HORIZON) }
+          horizon: { value: new THREE.Vector3(...SKY_HORIZON) },
+          glow: { value: 0 }
         },
         side: THREE.BackSide,
         depthWrite: false
       })
     )
     dome.renderOrder = -10
+    this.skyDome = dome
     dome.frustumCulled = false
     this.sky.add(dome)
 
@@ -482,6 +491,14 @@ export class SkyScene {
     )
     this.moonTrail.frustumCulled = false
     this.sky.add(this.moonTrail)
+  }
+
+  private skyDome?: THREE.Mesh
+
+  /** Lueur de pollution lumineuse dans le fond du ciel, de 0 (ciel naturel) à 1 (centre-ville). */
+  setSkyGlow(strength: number): void {
+    const mat = this.skyDome?.material as THREE.ShaderMaterial | undefined
+    if (mat) mat.uniforms.glow.value = Math.max(0, Math.min(1, strength))
   }
 
   private terrain?: THREE.Mesh

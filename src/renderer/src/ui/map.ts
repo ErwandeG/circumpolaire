@@ -1,6 +1,14 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { zoomFor, type Place } from '../domain/place'
+import {
+  LP_BOUNDS,
+  LP_CREDIT,
+  LP_MAP_IMAGE,
+  isLightPollutionOn,
+  onLightPollutionChange,
+  setLightPollutionOn
+} from '../services/lightPollutionMap'
 
 /** Plan IGN v2, servi par la Géoplateforme en WMTS (gratuit, sans clé). */
 export const PLAN_IGN_URL =
@@ -50,6 +58,35 @@ export function createMap(
   marker.bindTooltip(initial.label)
 
   map.on('click', (e: L.LeafletMouseEvent) => onPick(e.latlng.lat, e.latlng.lng))
+
+  // Pollution lumineuse : couche de l'atlas et interrupteur, en haut à droite de la carte.
+  const lpLayer = L.imageOverlay(
+    LP_MAP_IMAGE,
+    L.latLngBounds([LP_BOUNDS.south, LP_BOUNDS.west], [LP_BOUNDS.north, LP_BOUNDS.east]),
+    { opacity: 0.85, interactive: false, attribution: LP_CREDIT }
+  )
+  const LpControl = L.Control.extend({
+    onAdd() {
+      const box = L.DomUtil.create('div', 'lp-control')
+      box.innerHTML =
+        '<span class="lp-label">Pollution lumineuse</span>' +
+        '<button class="switch" type="button" role="switch" aria-checked="false" aria-label="Pollution lumineuse" ' +
+        'title="Atlas de David Lorenz (2025) : affiché sur la carte, et pris en compte dans la vue 3D (étoiles visibles, lueur à l’horizon)">' +
+        '<span class="switch-knob"></span></button>'
+      L.DomEvent.disableClickPropagation(box)
+      const sw = box.querySelector('button')!
+      sw.addEventListener('click', () => setLightPollutionOn(!isLightPollutionOn()))
+      const show = (on: boolean) => {
+        sw.setAttribute('aria-checked', String(on))
+        if (on) lpLayer.addTo(map)
+        else lpLayer.remove()
+      }
+      onLightPollutionChange(show)
+      show(isLightPollutionOn())
+      return box
+    }
+  })
+  new LpControl({ position: 'topright' }).addTo(map)
 
   return {
     showPlace(place) {
