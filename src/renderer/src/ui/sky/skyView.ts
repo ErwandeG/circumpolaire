@@ -31,7 +31,12 @@ import { createMiniMap } from './miniMap'
 import { SkyScene } from './scene'
 import { createSceneLoader } from './sceneLoader'
 import { skyQuality, type SkyQuality } from '../../domain/lightPollution'
-import { isLightPollutionOn, lightPollutionLevel, onLightPollutionChange } from '../../services/lightPollutionMap'
+import {
+  isLightPollutionOn,
+  lightPollutionLevel,
+  onLightPollutionChange,
+  setLightPollutionOn
+} from '../../services/lightPollutionMap'
 import { setupMovement } from './movement'
 import { createSkyState, toPreferences, type Observer } from './skyState'
 import { allStars, limitingMagnitude, polarisIndex, starField, trailSamples } from './starCatalog'
@@ -77,6 +82,7 @@ interface SkyElements {
   rollNum: HTMLInputElement
   treesOn: HTMLButtonElement
   hdOn: HTMLButtonElement
+  lpOn: HTMLButtonElement
   reliefOn: HTMLButtonElement
   reliefDist: HTMLInputElement
   reliefDistNum: HTMLInputElement
@@ -166,7 +172,12 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     recomputeSky()
     draw()
   }
-  onLightPollutionChange(() => void updateLightPollution())
+  // Même réglage que l'interrupteur de la carte principale : les deux restent synchronisés.
+  el.lpOn.addEventListener('click', () => setLightPollutionOn(!isLightPollutionOn()))
+  onLightPollutionChange((on) => {
+    el.lpOn.setAttribute('aria-checked', String(on))
+    void updateLightPollution()
+  })
 
   // --- Calculs du ciel (seulement quand le lieu, l'heure ou la durée changent) ---
   let moonInfo = { fraction: 0, altitude: 0, azimuth: 0 }
@@ -287,6 +298,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.roll.value = String(state.roll)
     el.treesOn.setAttribute('aria-checked', String(state.showTrees))
     el.hdOn.setAttribute('aria-checked', String(state.hdBuildings))
+    el.lpOn.setAttribute('aria-checked', String(isLightPollutionOn()))
     el.reliefOn.setAttribute('aria-checked', String(state.reliefOn))
     el.reliefDist.value = String(Math.round(sliderFromRelief(state.reliefDistance) * 1000))
     el.reliefDist.disabled = !state.reliefOn

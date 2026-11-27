@@ -75,6 +75,7 @@ const sky = setupSkyView(
     rollNum: byId('roll-num'),
     treesOn: byId('trees-on'),
     hdOn: byId('hd-on'),
+    lpOn: byId('lp-on'),
     reliefOn: byId('relief-on'),
     reliefDist: byId('relief-dist'),
     reliefDistNum: byId('relief-dist-num'),
