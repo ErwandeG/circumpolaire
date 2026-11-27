@@ -443,7 +443,7 @@ function assembleMesh(
       if (isVeg(p) && isVeg(q)) idx.push(p, q, bottomOf(q), p, bottomOf(q), bottomOf(p))
     }
   }
-  // Sol plat : blocs jusqu'à 16 × 16 cellules réduits à deux triangles quand tous leurs sommets
+  // Sol plat : blocs jusqu'à 16 × 16 cellules réduits à un éventail (4 × côté triangles) quand tous leurs sommets
   // sont du sol (ni arbre, ni abords de façade) à moins de 5 cm du plan des deux triangles.
   // Sur une place ou une rue, des dizaines de fois moins de triangles ; le relief garde le pas fin.
   const y = (r: number, c: number) => top[(r * cols + c) * 3 + 1]
@@ -470,9 +470,15 @@ function assembleMesh(
   const emit = (r0: number, c0: number, size: number): void => {
     const a = r0 * cols + c0
     if (size > 1 && mergeable(r0, c0, size)) {
-      const b = a + size
-      const d = a + size * cols
-      idx.push(a, d, b, b, d, d + size)
+      // Éventail depuis le centre du bloc, appuyé sur TOUS les sommets du pourtour : les bords
+      // coïncident exactement avec les cellules ou blocs voisins, sans fissure (pas de jonction en T).
+      const center = a + (size / 2) * cols + size / 2
+      const ring: number[] = []
+      for (let k = 0; k < size; k++) ring.push(a + k) // bord nord, d'ouest en est
+      for (let k = 0; k < size; k++) ring.push(a + size + k * cols) // bord est, vers le sud
+      for (let k = 0; k < size; k++) ring.push(a + size * cols + size - k) // bord sud, vers l'ouest
+      for (let k = 0; k < size; k++) ring.push(a + (size - k) * cols) // bord ouest, vers le nord
+      for (let k = 0; k < ring.length; k++) idx.push(center, ring[(k + 1) % ring.length], ring[k])
       return
     }
     if (size === 1) {

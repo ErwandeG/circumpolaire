@@ -181,6 +181,42 @@ describe('simplification du sol', () => {
     const nBumpy = buildTerrain(obs, bumpy, bumpy, [], 30).indices.length / 3
     // 63 × 63 cellules = 7 938 triangles au pas fin.
     expect(nBumpy).toBe(2 * 63 * 63)
-    expect(nFlat).toBeLessThan(nBumpy / 10)
+    expect(nFlat).toBeLessThan(nBumpy / 3)
+  })
+})
+
+describe('sol simplifié sans fissure', () => {
+  it('ne laisse aucune arête intérieure orpheline entre blocs fusionnés et cellules fines', async () => {
+    const { buildTerrain } = await import('./terrain')
+    const cols = 64
+    const values = new Float32Array(cols * cols)
+    // Sol plat, sauf une butte irrégulière : mélange de grands blocs et de cellules au pas fin.
+    for (let r = 0; r < cols; r++)
+      for (let c = 0; c < cols; c++) values[r * cols + c] = 150 + (r > 20 && r < 30 && c > 25 && c < 40 ? 0.3 * Math.sin(r * c) : 0)
+    const grid = { minX: 1000, maxY: 2064, res: 1, cols, rows: cols, values }
+    const mesh = buildTerrain({ x: 1032, y: 2032, lat: 46.5, lon: 3 }, grid, grid, [], 30)
+    const n = cols * cols
+    const uses = new Map<string, number>()
+    for (let t = 0; t < mesh.indices.length; t += 3) {
+      const v = [mesh.indices[t], mesh.indices[t + 1], mesh.indices[t + 2]]
+      if (v.some((i) => i >= n)) continue
+      for (let e = 0; e < 3; e++) {
+        const a = Math.min(v[e], v[(e + 1) % 3])
+        const b = Math.max(v[e], v[(e + 1) % 3])
+        uses.set(`${a}-${b}`, (uses.get(`${a}-${b}`) ?? 0) + 1)
+      }
+    }
+    const onBorder = (i: number) => {
+      const r = Math.floor(i / cols)
+      const c = i % cols
+      return r === 0 || c === 0 || r === cols - 1 || c === cols - 1
+    }
+    const orphans = [...uses].filter(([k, count]) => {
+      const [a, b] = k.split('-').map(Number)
+      return count === 1 && !(onBorder(a) && onBorder(b))
+    })
+    expect(orphans).toEqual([])
+    // Et la simplification reste nette : bien moins que les 7 938 triangles du pas fin.
+    expect(mesh.indices.length / 3).toBeLessThan(4000)
   })
 })
