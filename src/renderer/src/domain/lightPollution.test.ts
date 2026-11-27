@@ -30,3 +30,24 @@ describe('pollution lumineuse', () => {
     expect(skyQuality(14).glow).toBeCloseTo(1, 1)
   })
 })
+
+describe('filés photographiés', async () => {
+  const { trailLimit, trailWidthArcsec } = await import('./lightPollution')
+  const w24 = trailWidthArcsec(24, 36)
+
+  it('calibre : Strasbourg, 24 mm plein format, déclinaison 45°', () => {
+    expect(trailLimit(18.7, 45, w24, 'raw')).toBeCloseTo(4.5, 0)
+    expect(trailLimit(18.7, 45, w24, 'standard')).toBeCloseTo(5.5, 0)
+    expect(trailLimit(18.7, 45, w24, 'pushed')).toBeCloseTo(6.5, 0)
+  })
+
+  it('montre des filés plus faibles près du pôle, et sous un ciel plus noir', () => {
+    expect(trailLimit(18.7, 85, w24, 'standard')).toBeGreaterThan(trailLimit(18.7, 45, w24, 'standard') + 2)
+    expect(trailLimit(22, 45, w24, 'standard')).toBeGreaterThan(trailLimit(18.7, 45, w24, 'standard') + 3)
+  })
+
+  it('affine le trait avec la focale, jusqu’à la limite de netteté de l’air', () => {
+    expect(trailWidthArcsec(135, 36)).toBeLessThan(w24)
+    expect(trailWidthArcsec(600, 36)).toBe(20)
+  })
+})

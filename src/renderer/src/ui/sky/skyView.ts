@@ -30,7 +30,15 @@ import { EXPORT_LONG_SIDE_PX, composeCapture, saveCapture } from './exportImage'
 import { createMiniMap } from './miniMap'
 import { SkyScene } from './scene'
 import { createSceneLoader } from './sceneLoader'
-import { skyQuality, type SkyQuality } from '../../domain/lightPollution'
+import {
+  PROCESSING_LABELS,
+  skyQuality,
+  trailLimit,
+  trailWidthArcsec,
+  type Processing,
+  type SkyQuality
+} from '../../domain/lightPollution'
+import { StarField, type StarRow } from '../../domain/astro/sky'
 import {
   isLightPollutionOn,
   lightPollutionLevel,
@@ -84,6 +92,9 @@ interface SkyElements {
   treesOn: HTMLButtonElement
   hdOn: HTMLButtonElement
   lpOn: HTMLButtonElement
+  procRaw: HTMLButtonElement
+  procStandard: HTMLButtonElement
+  procPushed: HTMLButtonElement
   reliefOn: HTMLButtonElement
   reliefDist: HTMLInputElement
   reliefDistNum: HTMLInputElement
@@ -156,6 +167,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   }
   el.sensor.addEventListener('change', () => {
     state.sensorId = sensorById(el.sensor.value).id
+    if (lp) scheduleSky()
     rememberSettings()
     syncInputs()
     layout()
@@ -170,19 +182,36 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
 
   // --- Pollution lumineuse du lieu (interrupteur de la carte principale) ---
   let lp: SkyQuality | null = null
-  /** Étoiles affichées : le réglage, limité par la magnitude visible sous le ciel du lieu. */
-  function visibleStarCount(): number {
-    if (!lp) return state.starCount
-    let lo = 0
-    let hi = state.starCount
-    // Catalogue trié par éclat : première étoile plus faible que la limite.
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1
-      if (allStars[mid][2] <= lp.limit) lo = mid + 1
-      else hi = mid
+  /**
+   * Étoiles affichées : celles du réglage dont le filé ressort du fond de ciel sur la photo,
+   * selon leur déclinaison, la brillance du ciel, la focale, le capteur et le traitement.
+   * Sans pollution lumineuse activée : toutes celles du réglage.
+   */
+  const visibleCache = new Map<string, { rows: StarRow[]; field: StarField; polaris: number }>()
+  function visibleStars(): { rows: StarRow[]; field: StarField; polaris: number } {
+    if (!lp) return { rows: allStars.slice(0, state.starCount), field: starField(state.starCount), polaris: polarisIndex }
+    const width = trailWidthArcsec(state.focalMm, sensorById(state.sensorId).widthMm)
+    const key = `${state.starCount}|${lp.sqm.toFixed(2)}|${width.toFixed(1)}|${state.processing}`
+    let v = visibleCache.get(key)
+    if (!v) {
+      const rows: StarRow[] = []
+      let polaris = -1
+      for (let i = 0; i < state.starCount; i++) {
+        const r = allStars[i]
+        // La Polaire reste affichée : c'est le repère de la composition.
+        if (i === polarisIndex) polaris = rows.length
+        if (i === polarisIndex || r[2] <= trailLimit(lp.sqm, r[1], width, state.processing)) rows.push(r)
+      }
+      v = { rows, field: new StarField(rows), polaris }
+      if (visibleCache.size > 12) visibleCache.clear()
+      visibleCache.set(key, v)
     }
-    return Math.max(1, lo)
+    return v
   }
+  /** Magnitude limite d'un filé à une déclinaison donnée, pour le détail sous le curseur. */
+  const trailLimitAt = (dec: number) =>
+    lp ? trailLimit(lp.sqm, dec, trailWidthArcsec(state.focalMm, sensorById(state.sensorId).widthMm), state.processing) : NaN
+  let visibleCount = state.starCount
   async function updateLightPollution(): Promise<void> {
     const { lat, lon } = state.observer
     const level = isLightPollutionOn() ? await lightPollutionLevel(lat, lon) : null
@@ -191,10 +220,27 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     recomputeSky()
     draw()
   }
+  // Traitement de l'image : seuil de visibilité des filés.
+  const procButtons: [HTMLButtonElement, Processing][] = [
+    [el.procRaw, 'raw'],
+    [el.procStandard, 'standard'],
+    [el.procPushed, 'pushed']
+  ]
+  for (const [button, value] of procButtons) {
+    button.addEventListener('click', () => {
+      if (state.processing === value) return
+      state.processing = value
+      rememberSettings()
+      syncInputs()
+      recomputeSky()
+      draw()
+    })
+  }
   // Même réglage que l'interrupteur de la carte principale : les deux restent synchronisés.
   el.lpOn.addEventListener('click', () => setLightPollutionOn(!isLightPollutionOn()))
   onLightPollutionChange((on) => {
     el.lpOn.setAttribute('aria-checked', String(on))
+    syncInputs()
     void updateLightPollution()
   })
 
@@ -202,11 +248,10 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   let moonInfo = { fraction: 0, altitude: 0, azimuth: 0 }
   function recomputeSky(): void {
     const { lat, lon } = state.observer
-    // Pollution lumineuse : les étoiles plus faibles que la magnitude limite du lieu disparaissent.
-    const count = visibleStarCount()
-    const field = starField(count)
-    const stars = allStars.slice(0, count)
-    const samples = trailSamples(state.durationMin, count)
+    // Pollution lumineuse : seules les étoiles dont le filé ressort du fond de ciel sont affichées.
+    const { rows: stars, field, polaris } = visibleStars()
+    visibleCount = stars.length
+    const samples = trailSamples(state.durationMin, Math.max(1, stars.length))
     const starStart = field.trails(state.start, 0, 1, lat, lon)
     const trails = field.trails(state.start, state.durationMin, samples, lat, lon)
     const moon = moonState(state.start, state.durationMin, Math.min(samples, 25), lat, lon)
@@ -219,7 +264,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       starStart,
       trails,
       samples,
-      polarisIndex,
+      polarisIndex: polaris,
       pole: northCelestialPole(state.start, lat, lon),
       moon
     })
@@ -279,13 +324,16 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   // --- Textes ---
   function renderHud(): void {
     el.hud.textContent = hudLine(state, fov(), moonInfo)
-    el.starsOut.textContent = `(magnitude ≤ ${fmt1(limitingMagnitude(visibleStarCount()))})`
+    el.starsOut.textContent = `(magnitude ≤ ${fmt1(limitingMagnitude(state.starCount))})`
     // Détail de la pollution lumineuse, sous le curseur des étoiles.
     el.starsLp.hidden = !lp
     if (lp) {
       el.starsLp.textContent =
-        `Pollution lumineuse ${lp.name} : ciel à ${fmt1(lp.sqm)} mag/arcsec², ` +
-        `étoiles visibles à l’œil nu jusqu’à la magnitude ${fmt1(lp.limit)}.`
+        `Pollution lumineuse ${lp.name} : ciel à ${fmt1(lp.sqm)} mag/arcsec². ` +
+        `Filés visibles jusqu’à la magnitude ${fmt1(trailLimitAt(0))} sur l’équateur céleste, ` +
+        `${fmt1(trailLimitAt(80))} près du pôle (traitement ${PROCESSING_LABELS[state.processing]}) : ` +
+        `${visibleCount.toLocaleString('fr-FR')} étoiles sur ${state.starCount.toLocaleString('fr-FR')}. ` +
+        `À l’œil nu : magnitude ${fmt1(lp.limit)}.`
     }
     el.focalEq.textContent = focalEquivalentText(state)
     // Les champs de saisie suivent les curseurs, sauf pendant qu'on y tape.
@@ -323,6 +371,15 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.treesOn.setAttribute('aria-checked', String(state.showTrees))
     el.hdOn.setAttribute('aria-checked', String(state.hdBuildings))
     el.lpOn.setAttribute('aria-checked', String(isLightPollutionOn()))
+    for (const [button, value] of [
+      [el.procRaw, 'raw'],
+      [el.procStandard, 'standard'],
+      [el.procPushed, 'pushed']
+    ] as const) {
+      button.setAttribute('aria-pressed', String(state.processing === value))
+      // Le traitement ne compte que sous un ciel pollué (pollution lumineuse activée).
+      button.disabled = !isLightPollutionOn()
+    }
     el.reliefOn.setAttribute('aria-checked', String(state.reliefOn))
     el.reliefDist.value = String(Math.round(sliderFromRelief(state.reliefDistance) * 1000))
     el.reliefDist.disabled = !state.reliefOn
@@ -349,6 +406,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   // --- Interactions ---
   el.focal.addEventListener('input', () => {
     state.focalMm = focalFromSlider(Number(el.focal.value) / 1000)
+    if (lp) scheduleSky()
     rememberSettings()
     draw()
   })
@@ -424,6 +482,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     })
   bindNumber(el.focalNum, (v) => {
     state.focalMm = Math.min(FOCAL_MAX_MM, Math.max(FOCAL_MIN_MM, v))
+    if (lp) scheduleSky()
     rememberSettings()
     draw()
   })

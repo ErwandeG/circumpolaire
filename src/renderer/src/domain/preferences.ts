@@ -15,6 +15,7 @@ import {
   SCENE_RADIUS_M,
   type SceneRadius
 } from './terrain'
+import { PROCESSINGS, type Processing } from './lightPollution'
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x))
 
@@ -33,6 +34,8 @@ export interface ViewPreferences {
   /** Hauteur de l'œil au-dessus du sol, en mètres. */
   eyeHeight: number
   showTrees: boolean
+  /** Traitement des photos (seuil de visibilité des filés sous un ciel pollué). */
+  processing: Processing
   /** Bâtiments HD (maquette 3D de Strasbourg) à la place des bâtiments reconstruits. */
   hdBuildings: boolean
   /** Relief lointain (crêtes de montagne) affiché. */
@@ -64,6 +67,7 @@ export const DEFAULT_PREFERENCES: ViewPreferences = {
   controlsCollapsed: false,
   eyeHeight: EYE_HEIGHT_M,
   showTrees: true,
+  processing: 'standard',
   hdBuildings: false,
   reliefOn: false,
   reliefDistanceM: 5000
@@ -102,6 +106,7 @@ export function sanitizePreferences(raw: unknown): ViewPreferences {
     controlsCollapsed: typeof p.controlsCollapsed === 'boolean' ? p.controlsCollapsed : d.controlsCollapsed,
     eyeHeight: eye === undefined ? d.eyeHeight : clampEyeHeight(eye),
     showTrees: typeof p.showTrees === 'boolean' ? p.showTrees : d.showTrees,
+    processing: PROCESSINGS.includes(p.processing as Processing) ? (p.processing as Processing) : d.processing,
     hdBuildings: typeof p.hdBuildings === 'boolean' ? p.hdBuildings : d.hdBuildings,
     reliefOn: typeof p.reliefOn === 'boolean' ? p.reliefOn : d.reliefOn,
     reliefDistanceM: relief === undefined ? d.reliefDistanceM : clampReliefDistance(relief)

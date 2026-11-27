@@ -27,6 +27,7 @@ export function createSkyState(prefs: ViewPreferences, starMax: number) {
     controlsCollapsed: prefs.controlsCollapsed,
     eyeHeight: prefs.eyeHeight,
     showTrees: prefs.showTrees,
+    processing: prefs.processing,
     hdBuildings: prefs.hdBuildings,
     reliefOn: prefs.reliefOn,
     reliefDistance: prefs.reliefDistanceM
@@ -48,6 +49,7 @@ export function toPreferences(s: SkyState): ViewPreferences {
     controlsCollapsed: s.controlsCollapsed,
     eyeHeight: s.eyeHeight,
     showTrees: s.showTrees,
+    processing: s.processing,
     hdBuildings: s.hdBuildings,
     reliefOn: s.reliefOn,
     reliefDistanceM: s.reliefDistance

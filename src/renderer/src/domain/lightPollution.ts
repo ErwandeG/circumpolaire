@@ -53,3 +53,45 @@ export function skyQuality(level: number): SkyQuality {
   const sqm = skyBrightness(lpi)
   return { level, name: LP_LEVEL_NAMES[level] ?? '?', lpi, sqm, limit: nakedEyeLimit(sqm), glow: glowStrength(lpi) }
 }
+
+// --- Filés photographiés ---
+//
+// Un filé ne s'accumule pas sur le capteur : l'étoile ne reste qu'un instant sur chaque pixel, alors que
+// le fond de ciel, lui, s'accumule pendant toute la pose. Ce qui décide si un filé se voit, c'est le
+// contraste entre sa brillance de surface (l'éclat de l'étoile étalé sur la largeur du trait et sur
+// la vitesse apparente) et celle du ciel. L'ouverture éclaire autant les deux : elle ne compte pas.
+
+/** Traitement de l'image finale : seuil de contraste à partir duquel un filé ressort du fond. */
+export type Processing = 'raw' | 'standard' | 'pushed'
+export const PROCESSINGS: readonly Processing[] = ['raw', 'standard', 'pushed']
+export const PROCESSING_LABELS: Record<Processing, string> = { raw: 'brut', standard: 'standard', pushed: 'poussé' }
+
+/**
+ * Marge de contraste (magnitudes) selon le traitement : brut (image telle quelle), standard
+ * (empilement et courbes usuelles), poussé (soustraction du fond, étirement fort). Calée pour qu'à
+ * Strasbourg (18,7 mag/arcsec²), au 24 mm plein format, un filé à mi-hauteur de déclinaison
+ * ressorte jusqu'à la magnitude ≈ 4,5 / 5,5 / 6,5.
+ */
+export const PROCESSING_MARGIN: Record<Processing, number> = { raw: -6.4, standard: -5.4, pushed: -4.4 }
+
+/** Vitesse apparente d'une étoile sur l'équateur céleste (secondes d'arc par seconde). */
+export const SIDEREAL_ARCSEC_PER_S = 15.041
+
+/**
+ * Largeur d'un filé sur l'image (secondes d'arc) : environ 2,5 pixels d'un capteur de 6 000 pixels de
+ * large (≈ 24 Mpx), au moins 20″ (turbulence de l'air, mise au point).
+ */
+export function trailWidthArcsec(focalMm: number, sensorWidthMm: number): number {
+  const pitchMm = sensorWidthMm / 6000
+  return Math.max(20, ((2.5 * pitchMm) / focalMm) * 206_265)
+}
+
+/**
+ * Magnitude la plus faible dont le filé ressort du fond de ciel, pour une étoile de déclinaison donnée :
+ * m < SQM − 2,5 log10(largeur × vitesse) + marge. Près du pôle, l'étoile avance lentement : son filé
+ * est plus concentré et ressort mieux.
+ */
+export function trailLimit(sqm: number, decDeg: number, widthArcsec: number, processing: Processing): number {
+  const speed = SIDEREAL_ARCSEC_PER_S * Math.max(0.01, Math.cos((decDeg * Math.PI) / 180))
+  return sqm - 2.5 * Math.log10(widthArcsec * speed) + PROCESSING_MARGIN[processing]
+}
