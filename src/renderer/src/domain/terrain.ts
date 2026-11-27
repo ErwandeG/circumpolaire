@@ -252,7 +252,10 @@ export function buildTerrain(
     }
   }
 
-  const ground = assembleMesh(positions, kinds, groundRel, cols, rows, 0, 0, eyeAltitude)
+  // Pas fin gardé seulement autour des façades (ombres de contact) ; sous les bâtiments, le sol est caché.
+  const lock = new Uint8Array(cols * rows)
+  for (let i = 0; i < lock.length; i++) lock[i] = nearBuilding[i] && buildingAt[i] < 0 ? 1 : 0
+  const ground = assembleMesh(positions, kinds, groundRel, cols, rows, 0, 0, eyeAltitude, lock)
 
   // Bâtiments reconstruits : murs verticaux des emprises BD TOPO, toits LiDAR.
   const toScene = (x: number, y: number, h: number): [number, number, number] => {
@@ -362,6 +365,10 @@ export function eyePosition(
   return { x: local.e, y: ground + eyeHeight - ctx.eyeAltitude, z: -local.n, ground }
 }
 
+/** Sol plat : côté maximal d'un bloc fusionné (cellules) et écart toléré au plan. */
+const FLAT_BLOCK = 16
+const FLAT_TOLERANCE_M = 0.05
+
 /** Bas des cimes : 40 % de la hauteur de l'arbre, au plus 5 m au-dessus du sol. */
 export function crownBottom(groundY: number, topY: number): number {
   const h = topY - groundY
@@ -381,7 +388,9 @@ function assembleMesh(
   rows: number,
   fallbackCells: number,
   maskedCells: number,
-  eyeAltitude: number
+  eyeAltitude: number,
+  /** Sommets à garder au pas fin (abords des bâtiments : ombres de contact). */
+  lock?: Uint8Array
 ): TerrainMesh {
   const n = cols * rows
   const isVeg = (i: number) => kinds[i] === SurfaceKind.Vegetation
@@ -434,15 +443,53 @@ function assembleMesh(
       if (isVeg(p) && isVeg(q)) idx.push(p, q, bottomOf(q), p, bottomOf(q), bottomOf(p))
     }
   }
-  for (let r = 0; r < rows - 1; r++) {
-    for (let c = 0; c < cols - 1; c++) {
-      const a = r * cols + c
-      const b = a + 1
-      const d = a + cols
-      const e = d + 1
-      tri(a, d, b)
-      tri(b, d, e)
+  // Sol plat : blocs jusqu'à 16 × 16 cellules réduits à deux triangles quand tous leurs sommets
+  // sont du sol (ni arbre, ni abords de façade) à moins de 5 cm du plan des deux triangles.
+  // Sur une place ou une rue, des dizaines de fois moins de triangles ; le relief garde le pas fin.
+  const y = (r: number, c: number) => top[(r * cols + c) * 3 + 1]
+  const mergeable = (r0: number, c0: number, size: number): boolean => {
+    const r1 = r0 + size
+    const c1 = c0 + size
+    if (r1 > rows - 1 || c1 > cols - 1) return false
+    const hA = y(r0, c0)
+    const hB = y(r0, c1)
+    const hC = y(r1, c0)
+    const hD = y(r1, c1)
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const i = r * cols + c
+        if (kinds[i] !== SurfaceKind.Ground || lock?.[i]) return false
+        const u = (c - c0) / size
+        const v = (r - r0) / size
+        const h = u + v <= 1 ? hA + u * (hB - hA) + v * (hC - hA) : hD + (1 - u) * (hC - hD) + (1 - v) * (hB - hD)
+        if (Math.abs(y(r, c) - h) > FLAT_TOLERANCE_M) return false
+      }
     }
+    return true
+  }
+  const emit = (r0: number, c0: number, size: number): void => {
+    const a = r0 * cols + c0
+    if (size > 1 && mergeable(r0, c0, size)) {
+      const b = a + size
+      const d = a + size * cols
+      idx.push(a, d, b, b, d, d + size)
+      return
+    }
+    if (size === 1) {
+      if (r0 < rows - 1 && c0 < cols - 1) {
+        tri(a, a + cols, a + 1)
+        tri(a + 1, a + cols, a + cols + 1)
+      }
+      return
+    }
+    const h = size / 2
+    emit(r0, c0, h)
+    emit(r0, c0 + h, h)
+    emit(r0 + h, c0, h)
+    emit(r0 + h, c0 + h, h)
+  }
+  for (let r = 0; r < rows - 1; r += FLAT_BLOCK) {
+    for (let c = 0; c < cols - 1; c += FLAT_BLOCK) emit(r, c, FLAT_BLOCK)
   }
 
   return {

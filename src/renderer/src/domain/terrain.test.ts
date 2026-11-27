@@ -164,3 +164,23 @@ describe('arêtes des bâtiments HD', () => {
     }
   })
 })
+
+describe('simplification du sol', () => {
+  it('réduit un sol plat à quelques grands triangles, garde le pas fin sur le relief', async () => {
+    const { buildTerrain } = await import('./terrain')
+    const grid = (f: (r: number, c: number) => number) => {
+      const cols = 64
+      const values = new Float32Array(cols * cols)
+      for (let r = 0; r < cols; r++) for (let c = 0; c < cols; c++) values[r * cols + c] = f(r, c)
+      return { minX: 1000, maxY: 2064, res: 1, cols, rows: cols, values }
+    }
+    const obs = { x: 1032, y: 2032, lat: 46.5, lon: 3 }
+    const flat = grid(() => 150)
+    const bumpy = grid((r, c) => 150 + 0.5 * Math.sin(r) * Math.cos(c))
+    const nFlat = buildTerrain(obs, flat, flat, [], 30).indices.length / 3
+    const nBumpy = buildTerrain(obs, bumpy, bumpy, [], 30).indices.length / 3
+    // 63 × 63 cellules = 7 938 triangles au pas fin.
+    expect(nBumpy).toBe(2 * 63 * 63)
+    expect(nFlat).toBeLessThan(nBumpy / 10)
+  })
+})
