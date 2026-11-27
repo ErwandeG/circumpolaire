@@ -17,17 +17,7 @@ import {
   sliderFromRelief
 } from '../../domain/optics'
 import { formatParisTime, parisDayOf, parisTime, type CalendarDay } from '../../domain/time'
-import { distanceM, fromLocal, localFrame, stepToward } from '../../domain/geo/local'
-import {
-  EYE_HEIGHT_M,
-  EYE_HEIGHT_MAX_M,
-  EYE_HEIGHT_MIN_M,
-  eyePosition,
-  isBlocked,
-  type SceneRadius,
-  type WalkContext
-} from '../../domain/terrain'
-import { checkPointInFrance } from '../../services/geocoding'
+import type { SceneRadius } from '../../domain/terrain'
 import {
   DEFAULT_PREFERENCES,
   STAR_COUNT_MIN,
@@ -36,14 +26,11 @@ import {
   clampReliefDistance
 } from '../../domain/preferences'
 import { loadPreferences, savePreferences } from '../../services/storage'
-import { loadReliefGrids } from '../../services/reliefService'
-import { describeFetchError } from '../../services/cache'
-import { loadTerrain } from '../../services/terrainService'
-import { computeHorizonAsync } from './horizonClient'
 import { EXPORT_LONG_SIDE_PX, composeCapture, saveCapture } from './exportImage'
 import { createMiniMap } from './miniMap'
 import { SkyScene } from './scene'
-import { setupWalker } from './walker'
+import { createSceneLoader } from './sceneLoader'
+import { setupMovement } from './movement'
 import { createSkyState, toPreferences, type Observer } from './skyState'
 import { allStars, limitingMagnitude, polarisIndex, starField, trailSamples } from './starCatalog'
 import {
@@ -525,191 +512,43 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       `œil à ${state.eyeHeight.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} m du sol`
   }
 
-  // --- Relief et bâtiments ---
-  let walk: WalkContext | null = null
-  let lastGround = Number.NaN
-  let loading = false
-  let terrainRequest = 0
-  /** Dernier bilan du chargement des bâtiments, réaffiché quand une erreur de relief se résout. */
-  let terrainStatus = ''
-
-  /** Place l'œil au point courant, à la hauteur choisie au-dessus du sol de la scène chargée. */
-  function placeEye(): void {
-    if (!walk) {
-      // Sans relief chargé, le sol est à 1,70 m sous l'origine de la scène.
-      scene.setEye(0, state.eyeHeight - EYE_HEIGHT_M, 0, state.eyeHeight)
-      return
-    }
-    const fallback = Number.isNaN(lastGround) ? walk.eyeAltitude - EYE_HEIGHT_M : lastGround
-    const eye = eyePosition(walk, state.observer.lat, state.observer.lon, fallback, state.eyeHeight)
-    lastGround = eye.ground
-    scene.setEye(eye.x, eye.y, eye.z, state.eyeHeight)
-  }
-
-  /**
-   * Charge les bâtiments autour du point courant.
-   * keepCurrent : on garde la scène affichée pendant le chargement (déplacement à pied).
-   */
-  async function loadBuildings(keepCurrent: boolean): Promise<void> {
-    const id = ++terrainRequest
-    loading = true
-    if (!keepCurrent) {
-      walk = null
-      lastGround = Number.NaN
-      scene.setTerrain(null)
-      placeEye()
-    }
-    el.terrain.textContent = 'Chargement des bâtiments et du relief (LiDAR HD)…'
-    delete el.terrain.dataset.tone
-    setBusy('terrain', 'Bâtiments et relief proche')
-    const res = await loadTerrain(state.observer.lat, state.observer.lon, state.radius, { trees: state.showTrees, hdBuildings: state.hdBuildings })
-    if (id !== terrainRequest) return // une autre vue a été ouverte entre-temps
-    loading = false
-    setBusy('terrain', null)
-    if (res.status === 'error') {
-      el.terrain.textContent = keepCurrent && walk ? `${res.message} Zone précédente conservée.` : `${res.message} Horizon plat.`
-      el.terrain.dataset.tone = 'error'
-      draw()
-      void loadRelief()
-      return
-    }
-    const parts = [`${res.buildingCount} bâtiment${res.buildingCount > 1 ? 's' : ''} dans les ${state.radius} m`]
-    if (res.hdTiles > 0) parts.push(`bâtiments HD (${res.hdTiles} dalle${res.hdTiles > 1 ? 's' : ''})`)
-    if (res.mesh.fallbackShare > 0.01) {
-      parts.push(`${Math.round(res.mesh.fallbackShare * 100)} % sans LiDAR (volumes BD TOPO en orange)`)
-    }
-    if (res.movedM > 0 && !keepCurrent) {
-      parts.push(`point déplacé de ${fmt1(res.movedM)} m pour sortir du bâtiment`)
-      state.observer = { ...state.observer, lat: res.lat, lon: res.lon }
+  // --- Chargements : volumes 3D autour du point, puis relief lointain ---
+  const loader = createSceneLoader({
+    state,
+    scene,
+    status: el.terrain,
+    setBusy,
+    draw: () => draw(),
+    onObserverMoved: () => {
       showCoords()
       recomputeSky()
-    }
-    terrainStatus = parts.join(' · ')
-    el.terrain.textContent = terrainStatus
-    walk = res.walk
-    scene.setTerrain(res.mesh, state.radius)
-    miniMap.setZone(res.walk.frame.lat0, res.walk.frame.lon0, state.radius)
-    placeEye()
-    draw()
-    // Relief lointain ensuite, depuis la position finale (éventuellement sortie d'un bâtiment).
-    void loadRelief()
-  }
+    },
+    showZone: (lat, lon, radius) => miniMap.setZone(lat, lon, radius)
+  })
+  const { placeEye, loadBuildings, loadRelief, scheduleRelief } = loader
 
-  // --- Relief lointain : crêtes jusqu'à la distance choisie, au-delà de la scène détaillée ---
-  let reliefRequest = 0
-  const RELIEF_ERROR = 'Relief lointain indisponible'
-  async function loadRelief(): Promise<void> {
-    const id = ++reliefRequest
-    if (!state.reliefOn || state.reliefDistance <= state.radius) {
-      scene.setHorizon(null)
-      setBusy('relief', null)
-      draw()
-      return
-    }
-    setBusy('relief', 'Relief lointain')
-    const { lat, lon } = state.observer
-    try {
-      const grids = await loadReliefGrids(lat, lon, state.reliefDistance)
-      if (id !== reliefRequest) return
-      const result = await computeHorizonAsync(grids, lat, lon, state.eyeHeight, state.radius, state.reliefDistance)
-      if (id !== reliefRequest) return
-      scene.setHorizon(result)
-      // Une erreur de relief précédente n'a plus lieu d'être affichée.
-      if (el.terrain.textContent?.startsWith(RELIEF_ERROR)) {
-        el.terrain.textContent = terrainStatus
-        delete el.terrain.dataset.tone
-      }
-    } catch (e) {
-      if (id !== reliefRequest) return
-      el.terrain.textContent = describeFetchError(e, RELIEF_ERROR)
-      el.terrain.dataset.tone = 'error'
-    } finally {
-      if (id === reliefRequest) setBusy('relief', null)
-      draw()
-    }
-  }
-
-  let reliefTimer: ReturnType<typeof setTimeout> | undefined
-  /** Recalcul différé : on attend la fin du glissement du curseur. */
-  function scheduleRelief(): void {
-    clearTimeout(reliefTimer)
-    reliefTimer = setTimeout(() => void loadRelief(), 350)
-  }
-
-  // --- Déplacement à pied : 1 m/s, flèches de l'écran ou du clavier ---
-  /** Au-delà de la moitié du rayon depuis le point de chargement, on recharge la zone en marchant. */
-  const reloadDistance = () => state.radius / 2
-
-  function step(forward: number, right: number): void {
-    const d = stepToward(state.azimuth, forward, right)
-    const f = localFrame(state.observer.lat, state.observer.lon)
-    const tryMove = (e: number, n: number): boolean => {
-      const p = fromLocal(f, e, n)
-      if (walk && isBlocked(walk, p.lat, p.lon, state.eyeHeight)) return false
-      state.observer = { ...state.observer, lat: p.lat, lon: p.lon }
-      return true
-    }
-    // Contre une façade, on glisse le long du mur sur l'axe resté libre.
-    if (!tryMove(d.e, d.n) && !tryMove(d.e, 0)) tryMove(0, d.n)
-    placeEye()
-    showCoords()
-    draw()
-    const origin = walk ? { lat: walk.frame.lat0, lon: walk.frame.lon0 } : null
-    if (origin && !loading && distanceM(origin, state.observer) > reloadDistance()) void loadBuildings(true)
-  }
-
-  let stopTimer: ReturnType<typeof setTimeout> | undefined
-  function stopWalking(): void {
-    clearTimeout(stopTimer)
-    // À l'arrêt, on recharge la zone autour du nouveau point et on recalcule le ciel.
-    stopTimer = setTimeout(() => {
-      const origin = walk ? { lat: walk.frame.lat0, lon: walk.frame.lon0 } : null
-      if (!origin || distanceM(origin, state.observer) < 1) return
-      recomputeSky()
-      draw()
-      void loadBuildings(true)
-    }, 700)
-  }
-
-  // Hauteur au clavier : valeur exacte cumulée (le réglage est arrondi au centimètre),
-  // bornée comme le curseur.
-  let eyeExact = state.eyeHeight
-  function rise(upM: number): void {
-    if (Math.abs(eyeExact - state.eyeHeight) > 0.01) eyeExact = state.eyeHeight
-    eyeExact = Math.min(EYE_HEIGHT_MAX_M, Math.max(EYE_HEIGHT_MIN_M, eyeExact + upM))
-    const h = clampEyeHeight(eyeExact)
-    if (h === state.eyeHeight) return
-    state.eyeHeight = h
-    syncInputs()
-    applyEyeHeight()
-  }
-
-  setupWalker({
+  // --- Déplacement : marche et hauteur au clavier, saut vers un point de la mini-carte ---
+  const { moveTo } = setupMovement({
+    state,
+    loader,
     isActive: () => !el.root.hidden,
-    onStep: step,
-    onRise: rise,
-    onStop: stopWalking
+    draw: () => draw(),
+    showCoords,
+    recomputeSky,
+    onEyeHeight: () => {
+      syncInputs()
+      applyEyeHeight()
+    },
+    showPlace: (label) => {
+      el.place.textContent = label
+    },
+    showError: (message) => {
+      el.terrain.textContent = message
+      el.terrain.dataset.tone = 'error'
+    }
   })
 
   // --- Mini-carte : où l'on est, ce que l'on vise ; un clic déplace le point de vue ---
-  async function moveTo(lat: number, lon: number): Promise<void> {
-    const check = await checkPointInFrance(lat, lon)
-    if (check.status === 'outside') {
-      el.terrain.textContent = 'Ce point est hors de France métropolitaine.'
-      el.terrain.dataset.tone = 'error'
-      return
-    }
-    state.observer = {
-      lat,
-      lon,
-      label: check.status === 'inside' && check.label ? `Près de ${check.label}` : 'Point choisi sur la carte'
-    }
-    el.place.textContent = state.observer.label
-    showCoords()
-    recomputeSky()
-    draw()
-    void loadBuildings(false)
-  }
   const miniMap = createMiniMap(
     el.miniMapBox,
     el.miniMap,
