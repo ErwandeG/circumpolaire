@@ -65,8 +65,6 @@ const sky = setupSkyView(
     focalNum: byId('focal-num'),
     duration: byId('duration'),
     durationNum: byId('duration-num'),
-    stars: byId('stars'),
-    starsNum: byId('stars-num'),
     starsOut: byId('stars-out'),
     starsLp: byId('stars-lp'),
     focalEq: byId('focal-eq'),

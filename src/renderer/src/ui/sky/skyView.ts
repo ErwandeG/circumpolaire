@@ -20,8 +20,6 @@ import { formatParisTime, parisDayOf, parisTime, type CalendarDay } from '../../
 import type { SceneRadius } from '../../domain/terrain'
 import {
   DEFAULT_PREFERENCES,
-  STAR_COUNT_MIN,
-  STAR_COUNT_STEP,
   clampEyeHeight,
   clampReliefDistance
 } from '../../domain/preferences'
@@ -81,8 +79,6 @@ interface SkyElements {
   focalNum: HTMLInputElement
   duration: HTMLInputElement
   durationNum: HTMLInputElement
-  stars: HTMLInputElement
-  starsNum: HTMLInputElement
   starsOut: HTMLOutputElement
   starsLp: HTMLElement
   focalEq: HTMLOutputElement
@@ -340,7 +336,6 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     // Les champs de saisie suivent les curseurs, sauf pendant qu'on y tape.
     setNum(el.focalNum, Math.round(state.focalMm))
     setNum(el.durationNum, state.durationMin)
-    setNum(el.starsNum, state.starCount)
     setNum(el.eyeNum, state.eyeHeight)
     setNum(el.rollNum, state.roll)
     setNum(el.reliefDistNum, Math.round(state.reliefDistance / 100) / 10)
@@ -363,10 +358,6 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     el.duration.min = String(DURATION_MIN)
     el.duration.max = String(DURATION_MAX)
     el.duration.value = String(state.durationMin)
-    el.stars.min = String(STAR_COUNT_MIN)
-    el.stars.max = String(Math.min(15000, allStars.length))
-    el.stars.step = String(STAR_COUNT_STEP)
-    el.stars.value = String(state.starCount)
     el.eye.value = String(Math.round(sliderFromEye(state.eyeHeight) * 1000))
     el.roll.value = String(state.roll)
     el.treesOn.setAttribute('aria-checked', String(state.showTrees))
@@ -411,12 +402,6 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   })
   el.duration.addEventListener('input', () => {
     state.durationMin = Number(el.duration.value)
-    rememberSettings()
-    renderHud()
-    scheduleSky()
-  })
-  el.stars.addEventListener('input', () => {
-    state.starCount = Number(el.stars.value)
     rememberSettings()
     renderHud()
     scheduleSky()
@@ -487,12 +472,6 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   })
   bindNumber(el.durationNum, (v) => {
     state.durationMin = Math.round(Math.min(DURATION_MAX, Math.max(DURATION_MIN, v)))
-    rememberSettings()
-    scheduleSky()
-  })
-  bindNumber(el.starsNum, (v) => {
-    const max = Math.min(15000, allStars.length)
-    state.starCount = Math.min(max, Math.max(STAR_COUNT_MIN, Math.round(v / STAR_COUNT_STEP) * STAR_COUNT_STEP))
     rememberSettings()
     scheduleSky()
   })
