@@ -15,10 +15,10 @@ export function starField(count: number): StarField {
   return f
 }
 
-/** Nombre de points par filé : au plus ~400 000 sommets calculés, pour rester fluide à 15 000 étoiles. */
+/** Nombre de points par filé : au plus ~800 000 sommets calculés, pour rester fluide avec 40 000 étoiles. */
 export function trailSamples(durationMin: number, count: number): number {
   const wanted = Math.round(durationMin / 2) + 1
-  const budget = Math.floor(400_000 / count)
+  const budget = Math.floor(800_000 / count)
   return Math.max(4, Math.min(61, wanted, budget))
 }
 

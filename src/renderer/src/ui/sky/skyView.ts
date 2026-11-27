@@ -32,6 +32,7 @@ import { SkyScene } from './scene'
 import { createSceneLoader } from './sceneLoader'
 import {
   PROCESSING_LABELS,
+  naturalSky,
   skyQuality,
   trailLimit,
   trailWidthArcsec,
@@ -47,7 +48,7 @@ import {
 } from '../../services/lightPollutionMap'
 import { setupMovement } from './movement'
 import { createSkyState, toPreferences, type Observer } from './skyState'
-import { allStars, limitingMagnitude, polarisIndex, starField, trailSamples } from './starCatalog'
+import { allStars, polarisIndex, trailSamples } from './starCatalog'
 import {
   captureFileName,
   captureInfo,
@@ -167,7 +168,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   }
   el.sensor.addEventListener('change', () => {
     state.sensorId = sensorById(el.sensor.value).id
-    if (lp) scheduleSky()
+    scheduleSky()
     rememberSettings()
     syncInputs()
     layout()
@@ -189,18 +190,18 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
    */
   const visibleCache = new Map<string, { rows: StarRow[]; field: StarField; polaris: number }>()
   function visibleStars(): { rows: StarRow[]; field: StarField; polaris: number } {
-    if (!lp) return { rows: allStars.slice(0, state.starCount), field: starField(state.starCount), polaris: polarisIndex }
     const width = trailWidthArcsec(state.focalMm, sensorById(state.sensorId).widthMm)
-    const key = `${state.starCount}|${lp.sqm.toFixed(2)}|${width.toFixed(1)}|${state.processing}`
+    const key = `${sky().sqm.toFixed(2)}|${width.toFixed(1)}|${state.processing}`
     let v = visibleCache.get(key)
     if (!v) {
       const rows: StarRow[] = []
       let polaris = -1
-      for (let i = 0; i < state.starCount; i++) {
+      // Tout le catalogue (jusqu'à la magnitude 8) : c'est le calcul qui décide, pas un plafond.
+      for (let i = 0; i < allStars.length; i++) {
         const r = allStars[i]
         // La Polaire reste affichée : c'est le repère de la composition.
         if (i === polarisIndex) polaris = rows.length
-        if (i === polarisIndex || r[2] <= trailLimit(lp.sqm, r[1], width, state.processing)) rows.push(r)
+        if (i === polarisIndex || r[2] <= trailLimit(sky().sqm, r[1], width, state.processing)) rows.push(r)
       }
       v = { rows, field: new StarField(rows), polaris }
       if (visibleCache.size > 12) visibleCache.clear()
@@ -210,7 +211,9 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   }
   /** Magnitude limite d'un filé à une déclinaison donnée, pour le détail sous le curseur. */
   const trailLimitAt = (dec: number) =>
-    lp ? trailLimit(lp.sqm, dec, trailWidthArcsec(state.focalMm, sensorById(state.sensorId).widthMm), state.processing) : NaN
+    trailLimit(sky().sqm, dec, trailWidthArcsec(state.focalMm, sensorById(state.sensorId).widthMm), state.processing)
+  /** Ciel du lieu si la pollution lumineuse est activée, ciel naturel sinon. */
+  const sky = () => lp ?? naturalSky()
   let visibleCount = state.starCount
   async function updateLightPollution(): Promise<void> {
     const { lat, lon } = state.observer
@@ -324,17 +327,15 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   // --- Textes ---
   function renderHud(): void {
     el.hud.textContent = hudLine(state, fov(), moonInfo)
-    el.starsOut.textContent = `(magnitude ≤ ${fmt1(limitingMagnitude(state.starCount))})`
+    el.starsOut.textContent = `(${visibleCount.toLocaleString('fr-FR')})`
     // Détail de la pollution lumineuse, sous le curseur des étoiles.
-    el.starsLp.hidden = !lp
-    if (lp) {
-      el.starsLp.textContent =
-        `Pollution lumineuse ${lp.name} : ciel à ${fmt1(lp.sqm)} mag/arcsec². ` +
-        `Filés visibles jusqu’à la magnitude ${fmt1(trailLimitAt(0))} sur l’équateur céleste, ` +
-        `${fmt1(trailLimitAt(80))} près du pôle (traitement ${PROCESSING_LABELS[state.processing]}) : ` +
-        `${visibleCount.toLocaleString('fr-FR')} étoiles sur ${state.starCount.toLocaleString('fr-FR')}. ` +
-        `À l’œil nu : magnitude ${fmt1(lp.limit)}.`
-    }
+    el.starsLp.hidden = false
+    const s = sky()
+    el.starsLp.textContent =
+      (lp ? `Pollution lumineuse ${lp.name} : ciel à ${fmt1(s.sqm)} mag/arcsec². ` : `Ciel naturel (${fmt1(s.sqm)} mag/arcsec²). `) +
+      `Filés visibles jusqu’à la magnitude ${fmt1(trailLimitAt(0))} sur l’équateur céleste, ` +
+      `${fmt1(trailLimitAt(80))} près du pôle (traitement ${PROCESSING_LABELS[state.processing]}) : ` +
+      `${visibleCount.toLocaleString('fr-FR')} étoiles. À l’œil nu : magnitude ${fmt1(s.limit)}.`
     el.focalEq.textContent = focalEquivalentText(state)
     // Les champs de saisie suivent les curseurs, sauf pendant qu'on y tape.
     setNum(el.focalNum, Math.round(state.focalMm))
@@ -377,8 +378,6 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
       [el.procPushed, 'pushed']
     ] as const) {
       button.setAttribute('aria-pressed', String(state.processing === value))
-      // Le traitement ne compte que sous un ciel pollué (pollution lumineuse activée).
-      button.disabled = !isLightPollutionOn()
     }
     el.reliefOn.setAttribute('aria-checked', String(state.reliefOn))
     el.reliefDist.value = String(Math.round(sliderFromRelief(state.reliefDistance) * 1000))
@@ -406,7 +405,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   // --- Interactions ---
   el.focal.addEventListener('input', () => {
     state.focalMm = focalFromSlider(Number(el.focal.value) / 1000)
-    if (lp) scheduleSky()
+    scheduleSky()
     rememberSettings()
     draw()
   })
@@ -482,7 +481,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     })
   bindNumber(el.focalNum, (v) => {
     state.focalMm = Math.min(FOCAL_MAX_MM, Math.max(FOCAL_MIN_MM, v))
-    if (lp) scheduleSky()
+    scheduleSky()
     rememberSettings()
     draw()
   })
@@ -516,7 +515,6 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   setupResets([
     [el.focal, el.focalNum, DEFAULT_PREFERENCES.focalMm, `${DEFAULT_PREFERENCES.focalMm} mm`],
     [el.duration, el.durationNum, DEFAULT_PREFERENCES.durationMin, `${DEFAULT_PREFERENCES.durationMin} min`],
-    [el.stars, el.starsNum, DEFAULT_PREFERENCES.starCount, `${DEFAULT_PREFERENCES.starCount} étoiles`],
     [el.eye, el.eyeNum, DEFAULT_PREFERENCES.eyeHeight, `${String(DEFAULT_PREFERENCES.eyeHeight).replace('.', ',')} m`],
     [el.roll, el.rollNum, 0, '0°'],
     [el.reliefDist, el.reliefDistNum, DEFAULT_PREFERENCES.reliefDistanceM / 1000, `${DEFAULT_PREFERENCES.reliefDistanceM / 1000} km`]

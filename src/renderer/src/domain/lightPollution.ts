@@ -48,6 +48,11 @@ export interface SkyQuality {
   glow: number
 }
 
+/** Ciel naturel, sans pollution lumineuse : 22 mag/arcsec², aucune lueur. */
+export function naturalSky(): SkyQuality {
+  return { level: -1, name: 'aucune', lpi: 0, sqm: NATURAL_SKY_MAG, limit: nakedEyeLimit(NATURAL_SKY_MAG), glow: 0 }
+}
+
 export function skyQuality(level: number): SkyQuality {
   const lpi = levelToLpi(level)
   const sqm = skyBrightness(lpi)

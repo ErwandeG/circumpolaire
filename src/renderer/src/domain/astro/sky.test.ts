@@ -30,8 +30,9 @@ const field = new StarField(rows.slice(0, 2000))
 const VEGA = Object.entries(starData.names).find(([, n]) => n === 'Vega')![0]
 
 describe('catalogue', () => {
-  it('contient 15 000 étoiles triées par éclat, dont la Polaire parmi les 1 000 premières', () => {
-    expect(rows).toHaveLength(15000)
+  it('contient toutes les étoiles jusqu’à la magnitude 8, triées par éclat, Polaire parmi les 1 000 premières', () => {
+    expect(rows.length).toBeGreaterThan(40000)
+    expect(rows.at(-1)![2]).toBeLessThanOrEqual(8)
     for (let i = 1; i < rows.length; i++) expect(rows[i][2]).toBeGreaterThanOrEqual(rows[i - 1][2])
     expect(starData.polarisIndex).toBeLessThan(1000)
     expect(starData.names[String(starData.polarisIndex) as keyof typeof starData.names]).toBe('Polaris')

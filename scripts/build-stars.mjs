@@ -6,8 +6,9 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// L'appli affiche de 1 000 à 15 000 étoiles : on garde les 15 000 plus brillantes, triées par magnitude.
-const COUNT = 15000
+// On garde toutes les étoiles jusqu'à la magnitude 8, triées par magnitude : sous un ciel noir, avec un
+// traitement poussé, des filés d'étoiles de magnitude 8 ressortent encore sur la photo.
+const MAG_LIMIT = 8.0
 const csvPath = process.argv[2]
 if (!csvPath) {
   console.error('Usage : node scripts/build-stars.mjs <hygdata_v41.csv>')
@@ -60,7 +61,7 @@ for (const line of lines.slice(1)) {
 }
 
 stars.sort((a, b) => a.mag - b.mag)
-const selected = stars.slice(0, COUNT)
+const selected = stars.filter((s) => s.mag <= MAG_LIMIT)
 const polarisIndex = selected.findIndex((s) => s.name === 'Polaris')
 if (polarisIndex < 0) throw new Error('Polaris absente de la sélection')
 

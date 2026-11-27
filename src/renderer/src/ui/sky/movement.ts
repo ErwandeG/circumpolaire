@@ -11,8 +11,8 @@ import type { SkyState } from './skyState'
 import { setupWalker } from './walker'
 
 /**
- * À l'arrêt de la marche, les volumes 3D ne sont rechargés que si l'on s'est éloigné d'au moins
- * cette distance (horizontale) du point d'où ils ont été chargés : petits pas sans rechargement.
+ * À l'arrêt de la marche, ou après un clic sur la mini-carte, les volumes 3D ne sont rechargés que si
+ * l'on s'est éloigné d'au moins cette distance (horizontale) du point d'où ils ont été chargés.
  */
 export const RELOAD_MIN_DISTANCE_M = 10
 
@@ -99,6 +99,13 @@ export function setupMovement(ctx: MovementContext) {
     ctx.showPlace(state.observer.label)
     ctx.showCoords()
     ctx.recomputeSky()
+    // Clic à moins de 10 m du point de chargement : on se place dans la scène actuelle, sans recharger.
+    const o = origin()
+    if (o && distanceM(o, state.observer) < RELOAD_MIN_DISTANCE_M) {
+      loader.placeEye()
+      ctx.draw()
+      return
+    }
     ctx.draw()
     void loader.loadBuildings(false)
   }
