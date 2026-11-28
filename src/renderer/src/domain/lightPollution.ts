@@ -39,6 +39,34 @@ export function glowStrength(lpi: number): number {
   return Math.max(0, Math.min(1, Math.log10(1 + Math.max(0, lpi)) / 1.8))
 }
 
+/**
+ * Type de ciel en langage courant pour chaque niveau de l'atlas (0 à 14), du plus noir au plus clair.
+ * Repères approximatifs, à la manière de l'échelle de Bortle.
+ */
+export const SKY_CLASS_NAMES = [
+  'Ciel noir parfait',
+  'Ciel noir',
+  'Ciel noir',
+  'Campagne',
+  'Campagne',
+  'Campagne éclairée',
+  'Campagne éclairée',
+  'Périurbain',
+  'Périurbain',
+  'Banlieue',
+  'Banlieue',
+  'Ville',
+  'Ville',
+  'Centre-ville',
+  'Centre-ville'
+]
+
+/** « Ville (6b) » : type de ciel et zone de l'atlas. */
+export function skyClassLabel(level: number): string {
+  const k = Math.max(0, Math.min(LP_LEVELS - 1, Math.round(level)))
+  return `${SKY_CLASS_NAMES[k]} (${LP_LEVEL_NAMES[k]})`
+}
+
 export interface SkyQuality {
   level: number
   name: string
@@ -69,7 +97,14 @@ export function skyQuality(level: number): SkyQuality {
 /** Traitement de l'image finale : seuil de contraste à partir duquel un filé ressort du fond. */
 export type Processing = 'raw' | 'standard' | 'pushed'
 export const PROCESSINGS: readonly Processing[] = ['raw', 'standard', 'pushed']
-export const PROCESSING_LABELS: Record<Processing, string> = { raw: 'brut', standard: 'standard', pushed: 'poussé' }
+export const PROCESSING_LABELS: Record<Processing, string> = { raw: 'aucun', standard: 'léger', pushed: 'avancé' }
+
+/** Ce que recouvre chaque niveau de post-traitement, en langage courant (aide sous les boutons). */
+export const PROCESSING_HELP: Record<Processing, string> = {
+  raw: 'Photo telle qu’elle sort de l’appareil, sans retouche.',
+  standard: 'Empilement des images et réglage des courbes, comme dans un logiciel de retouche courant.',
+  pushed: 'Soustraction du fond de ciel et étirement fort : les filés les plus faibles ressortent.'
+}
 
 /**
  * Marge de contraste (magnitudes) selon le traitement : brut (image telle quelle), standard

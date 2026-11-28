@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { glowStrength, levelToLpi, nakedEyeLimit, skyBrightness, skyQuality } from './lightPollution'
+import { glowStrength, levelToLpi, LP_LEVELS, nakedEyeLimit, SKY_CLASS_NAMES, skyBrightness, skyClassLabel, skyQuality } from './lightPollution'
 
 describe('pollution lumineuse', () => {
   it('fait coïncider lumière artificielle et naturelle à la limite 3b / 4a', () => {
@@ -49,5 +49,14 @@ describe('filés photographiés', async () => {
   it('affine le trait avec la focale, jusqu’à la limite de netteté de l’air', () => {
     expect(trailWidthArcsec(135, 36)).toBeLessThan(w24)
     expect(trailWidthArcsec(600, 36)).toBe(20)
+  })
+})
+
+describe('libellés du ciel', () => {
+  it('nomme chaque niveau de l’atlas, du ciel noir au centre-ville', () => {
+    expect(SKY_CLASS_NAMES).toHaveLength(LP_LEVELS)
+    expect(skyClassLabel(0)).toBe('Ciel noir parfait (0)')
+    expect(skyClassLabel(12)).toBe('Ville (6b)')
+    expect(skyClassLabel(99)).toBe('Centre-ville (7b)')
   })
 })

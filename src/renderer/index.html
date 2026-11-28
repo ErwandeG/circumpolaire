@@ -113,22 +113,39 @@
                   <span class="unit">min</span>
                 </div>
               </div>
+            </fieldset>
+
+            <fieldset class="group">
+              <legend>Ciel et rendu</legend>
               <div class="ctrl">
-                <span class="ctrl-label">Étoiles visibles <output id="stars-out"></output></span>
+                <p class="stars-summary"><output id="stars-out"></output> <span id="stars-delta" class="stars-delta" hidden></span></p>
+              </div>
+              <div class="ctrl">
                 <div class="ctrl-head">
-                  <span class="ctrl-label">Pollution lumineuse</span>
-                  <button id="lp-on" class="switch" type="button" role="switch" aria-checked="false" aria-label="Pollution lumineuse" title="Atlas de David Lorenz (2025) : étoiles trop faibles masquées et lueur à l’horizon selon le lieu (même réglage que sur la carte)"><span class="switch-knob"></span></button>
+                  <span class="ctrl-label">Pollution lumineuse <span class="help" tabindex="0" title="Selon l’atlas de David Lorenz (2025, satellite VIIRS) : plus le ciel du lieu est éclairé, plus les étoiles faibles disparaissent de la photo et plus l’horizon jaunit. Même réglage que sur la carte. Désactivée : ciel naturel, sans aucune lumière artificielle.">?</span></span>
+                  <button id="lp-on" class="switch" type="button" role="switch" aria-checked="false" aria-label="Pollution lumineuse"><span class="switch-knob"></span></button>
                 </div>
+                <div class="sky-gauge" aria-hidden="true">
+                  <div class="sky-gauge-bar"><span id="sky-gauge-mark" class="sky-gauge-mark"></span></div>
+                  <div class="sky-gauge-ends"><span>Ciel noir</span><span>Centre-ville</span></div>
+                </div>
+                <p id="sky-class" class="ctrl-hint"></p>
+              </div>
+              <div class="ctrl">
                 <div class="ctrl-head">
-                  <span class="ctrl-label" title="Seuil à partir duquel un filé ressort du fond de ciel sur l’image finale">Traitement</span>
-                  <div class="seg seg-small" role="group" aria-label="Traitement de l’image">
-                    <button id="proc-raw" type="button" title="Image telle quelle, sans retouche">Brut</button>
-                    <button id="proc-standard" type="button" title="Empilement et courbes usuelles">Standard</button>
-                    <button id="proc-pushed" type="button" title="Soustraction du fond de ciel, étirement fort">Poussé</button>
+                  <span class="ctrl-label">Post-traitement <span class="help" tabindex="0" title="Retouche que vous comptez faire sur la photo finale. Plus elle est poussée, plus les filés faibles ressortent du fond de ciel, et plus il y a d’étoiles visibles.">?</span></span>
+                  <div class="seg seg-small" role="group" aria-label="Post-traitement de la photo">
+                    <button id="proc-raw" type="button" title="Photo telle qu’elle sort de l’appareil, sans retouche">Aucun</button>
+                    <button id="proc-standard" type="button" title="Empilement des images et réglage des courbes">Léger</button>
+                    <button id="proc-pushed" type="button" title="Soustraction du fond de ciel, étirement fort">Avancé</button>
                   </div>
                 </div>
-                <p id="stars-lp" class="ctrl-note" hidden></p>
+                <p id="proc-help" class="ctrl-hint"></p>
               </div>
+              <details class="more">
+                <summary>En savoir plus</summary>
+                <p id="stars-lp" class="ctrl-hint"></p>
+              </details>
             </fieldset>
 
             <fieldset class="group">

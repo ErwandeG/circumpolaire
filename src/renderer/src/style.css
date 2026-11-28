@@ -1166,6 +1166,113 @@ body {
   display: none;
 }
 
+/* Bloc « Ciel et rendu » */
+.stars-summary {
+  margin: 0;
+  font-size: 13px;
+  color: #e6e9ed;
+}
+
+.stars-summary output {
+  margin-left: 0;
+}
+
+.stars-delta {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #86efac;
+  background: rgb(34 197 94 / 0.15);
+  border-radius: 4px;
+}
+
+.stars-delta.down {
+  color: #fca5a5;
+  background: rgb(239 68 68 / 0.15);
+}
+
+.ctrl-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #8b97a6;
+}
+
+.help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #cbd5e1;
+  border: 1px solid #64748b;
+  border-radius: 50%;
+  cursor: help;
+  vertical-align: 1px;
+}
+
+.help:hover,
+.help:focus-visible {
+  color: #0f172a;
+  background: #cbd5e1;
+  outline: none;
+}
+
+.sky-gauge {
+  margin-top: 4px;
+}
+
+.sky-gauge.off {
+  opacity: 0.35;
+}
+
+.sky-gauge-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #0b1020, #1e3a8a 20%, #15803d 38%, #ca8a04 58%, #ea580c 78%, #fef3c7);
+}
+
+.sky-gauge-mark {
+  position: absolute;
+  top: -4px;
+  width: 4px;
+  height: 14px;
+  margin-left: -2px;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px #0f172a;
+}
+
+.sky-gauge-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #64748b;
+}
+
+.more {
+  font-size: 11px;
+  color: #8b97a6;
+}
+
+.more summary {
+  cursor: pointer;
+  color: #94a3b8;
+}
+
+.more summary:hover {
+  color: #e6e9ed;
+}
+
+.more p {
+  margin-top: 4px;
+}
+
 /* Barres de progression des chargements, en haut à droite de la vue */
 .busy-rows {
   display: flex;
