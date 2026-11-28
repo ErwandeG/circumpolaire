@@ -9,6 +9,7 @@ import {
   eyeFromSlider,
   fieldOfView,
   focalFromSlider,
+  focalAfterWheel,
   frameSize,
   reliefFromSlider,
   sensorById,
@@ -519,6 +520,36 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     draw()
   }
   el.roll.addEventListener('input', () => setRoll(Number(el.roll.value)))
+  // Molette sur la vue : focale, à pas fins si les crans sont espacés, larges s'ils s'enchaînent.
+  let lastWheel = 0
+  el.canvas.addEventListener(
+    'wheel',
+    (e) => {
+      if (e.deltaY === 0) return
+      e.preventDefault()
+      const now = performance.now()
+      const focal = focalAfterWheel(state.focalMm, -e.deltaY, now - lastWheel)
+      lastWheel = now
+      if (focal === state.focalMm) return
+      state.focalMm = focal
+      syncInputs()
+      scheduleSky()
+      rememberSettings()
+      draw()
+    },
+    { passive: false }
+  )
+  // A / E : tonneau, d'un degré entier par appui (répété si la touche reste enfoncée).
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase()
+    if ((k !== 'a' && k !== 'e') || e.ctrlKey || e.altKey || e.metaKey || el.root.hidden) return
+    const a = document.activeElement
+    if ((a instanceof HTMLInputElement && a.type !== 'range') || a instanceof HTMLSelectElement || a instanceof HTMLTextAreaElement) return
+    e.preventDefault()
+    setRoll(Math.round(state.roll) + (k === 'e' ? 1 : -1))
+    syncInputs()
+    renderHud()
+  })
   bindNumber(el.rollNum, setRoll)
   bindNumber(el.reliefDistNum, (km) => {
     state.reliefDistance = clampReliefDistance(km * 1000)

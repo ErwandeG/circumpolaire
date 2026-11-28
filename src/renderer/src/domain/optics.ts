@@ -50,8 +50,8 @@ export function equivalentFocal(sensor: Sensor, focalMm: number): number {
 
 export type FrameOrientation = 'landscape' | 'portrait'
 
-export const FOCAL_MIN_MM = 10
-export const FOCAL_MAX_MM = 600
+export const FOCAL_MIN_MM = 6
+export const FOCAL_MAX_MM = 2000
 
 /** Champ de vision (degrés) d'un objectif rectilinéaire sur un côté de capteur donné. */
 export function fieldOfView(sideMm: number, focalMm: number): number {
@@ -65,7 +65,7 @@ export function frameSize(sensor: Sensor, orientation: FrameOrientation): { widt
 }
 
 /**
- * Slider logarithmique : position 0…1 ↔ focale 10…600 mm.
+ * Slider logarithmique : position 0…1 ↔ focale 6…2000 mm.
  * Donne autant de place à 14→50 mm qu'à 170→600 mm.
  */
 export function focalFromSlider(position: number): number {
@@ -113,3 +113,16 @@ export const DURATION_MIN = 5
 export const DURATION_MAX = 120
 /** Rotation apparente du ciel : 360° par jour sidéral. */
 export const SIDEREAL_DEG_PER_MIN = 360 / (23.9344696 * 60)
+
+/**
+ * Molette dans la vue 3D : nouvelle focale après un cran, selon le temps écoulé depuis le cran
+ * précédent. Crans espacés (≥ 250 ms) : pas fin, 1 mm ou 1 % ; crans rapprochés : jusqu'à 15 %
+ * par cran, pour traverser vite toute la plage. Résultat arrondi au millimètre et borné.
+ */
+export const WHEEL_SLOW_MS = 250
+export function focalAfterWheel(focalMm: number, notches: number, intervalMs: number): number {
+  const speed = Math.max(0, Math.min(1, (WHEEL_SLOW_MS - intervalMs) / (WHEEL_SLOW_MS - 30)))
+  const step = Math.max(1, focalMm * (0.01 + 0.14 * speed))
+  const next = Math.round(focalMm + Math.sign(notches) * step)
+  return Math.max(FOCAL_MIN_MM, Math.min(FOCAL_MAX_MM, next))
+}
