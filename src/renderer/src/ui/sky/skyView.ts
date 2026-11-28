@@ -546,7 +546,7 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     const a = document.activeElement
     if ((a instanceof HTMLInputElement && a.type !== 'range') || a instanceof HTMLSelectElement || a instanceof HTMLTextAreaElement) return
     e.preventDefault()
-    setRoll(Math.round(state.roll) + (k === 'e' ? 1 : -1))
+    setRoll(Math.round(state.roll) + (k === 'e' ? -1 : 1))
     syncInputs()
     renderHud()
   })
