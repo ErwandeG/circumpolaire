@@ -175,8 +175,8 @@ describe('optique', () => {
   })
 
   it('slider logarithmique réversible', () => {
-    expect(focalFromSlider(0)).toBeCloseTo(10)
-    expect(focalFromSlider(1)).toBeCloseTo(600)
+    expect(focalFromSlider(0)).toBeCloseTo(6)
+    expect(focalFromSlider(1)).toBeCloseTo(2000)
     expect(sliderFromFocal(focalFromSlider(0.37))).toBeCloseTo(0.37)
   })
 })

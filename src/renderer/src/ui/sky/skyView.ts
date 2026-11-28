@@ -9,6 +9,7 @@ import {
   eyeFromSlider,
   fieldOfView,
   focalFromSlider,
+  focalAfterWheel,
   frameSize,
   reliefFromSlider,
   sensorById,
@@ -30,6 +31,9 @@ import { SkyScene } from './scene'
 import { createSceneLoader } from './sceneLoader'
 import {
   PROCESSING_LABELS,
+  PROCESSING_HELP,
+  LP_LEVELS,
+  skyClassLabel,
   naturalSky,
   skyQuality,
   trailLimit,
@@ -81,6 +85,10 @@ interface SkyElements {
   durationNum: HTMLInputElement
   starsOut: HTMLOutputElement
   starsLp: HTMLElement
+  starsDelta: HTMLElement
+  skyClass: HTMLElement
+  skyGaugeMark: HTMLElement
+  procHelp: HTMLElement
   focalEq: HTMLOutputElement
   eye: HTMLInputElement
   eyeNum: HTMLInputElement
@@ -228,17 +236,40 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   for (const [button, value] of procButtons) {
     button.addEventListener('click', () => {
       if (state.processing === value) return
+      const before = visibleCount
       state.processing = value
       rememberSettings()
       syncInputs()
       recomputeSky()
+      showStarsDelta(visibleCount - before)
       draw()
     })
   }
+  // Écart du nombre d'étoiles après un changement de post-traitement, affiché quelques secondes.
+  let deltaTimer = 0
+  function showStarsDelta(delta: number): void {
+    window.clearTimeout(deltaTimer)
+    el.starsDelta.hidden = delta === 0
+    el.starsDelta.textContent = `${delta > 0 ? '+' : '−'}${Math.abs(delta).toLocaleString('fr-FR')}`
+    el.starsDelta.classList.toggle('down', delta < 0)
+    deltaTimer = window.setTimeout(() => (el.starsDelta.hidden = true), 4000)
+  }
+
+  // Boutons « ? » : un clic déplie ou replie l'explication sous le réglage.
+  for (const button of document.querySelectorAll<HTMLButtonElement>('button.help[aria-controls]')) {
+    const help = document.getElementById(button.getAttribute('aria-controls') ?? '')
+    if (!help) continue
+    button.addEventListener('click', () => {
+      help.hidden = !help.hidden
+      button.setAttribute('aria-expanded', String(!help.hidden))
+    })
+  }
+
   // Même réglage que l'interrupteur de la carte principale : les deux restent synchronisés.
   el.lpOn.addEventListener('click', () => setLightPollutionOn(!isLightPollutionOn()))
   onLightPollutionChange((on) => {
     el.lpOn.setAttribute('aria-checked', String(on))
+    el.starsDelta.hidden = true
     syncInputs()
     void updateLightPollution()
   })
@@ -323,15 +354,20 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
   // --- Textes ---
   function renderHud(): void {
     el.hud.textContent = hudLine(state, fov(), moonInfo)
-    el.starsOut.textContent = `(${visibleCount.toLocaleString('fr-FR')})`
-    // Détail de la pollution lumineuse, sous le curseur des étoiles.
-    el.starsLp.hidden = false
+    el.starsOut.textContent = `≈ ${visibleCount.toLocaleString('fr-FR')} étoiles visibles sur la photo`
+    // Ciel du lieu : jauge du ciel noir au centre-ville, type de ciel en clair.
     const s = sky()
+    el.skyGaugeMark.hidden = !lp
+    el.skyGaugeMark.closest('.sky-gauge')?.classList.toggle('off', !lp)
+    if (lp) el.skyGaugeMark.style.left = `${(lp.level / (LP_LEVELS - 1)) * 100}%`
+    el.skyClass.textContent = lp ? `Ciel du lieu : ${skyClassLabel(lp.level)}` : 'Désactivée : ciel naturel, sans lumière artificielle.'
+    el.procHelp.textContent = PROCESSING_HELP[state.processing]
+    // Détails techniques, repliés par défaut.
     el.starsLp.textContent =
-      (lp ? `Pollution lumineuse ${lp.name} : ciel à ${fmt1(s.sqm)} mag/arcsec². ` : `Ciel naturel (${fmt1(s.sqm)} mag/arcsec²). `) +
-      `Filés visibles jusqu’à la magnitude ${fmt1(trailLimitAt(0))} sur l’équateur céleste, ` +
-      `${fmt1(trailLimitAt(80))} près du pôle (traitement ${PROCESSING_LABELS[state.processing]}) : ` +
-      `${visibleCount.toLocaleString('fr-FR')} étoiles. À l’œil nu : magnitude ${fmt1(s.limit)}.`
+      `Brillance du ciel : ${fmt1(s.sqm)} mag/arcsec²${lp ? ` (zone ${lp.name} de l’atlas Lorenz)` : ' (ciel naturel)'}. ` +
+      `Un filé ressort du fond jusqu’à la magnitude ${fmt1(trailLimitAt(0))} sur l’équateur céleste et ` +
+      `${fmt1(trailLimitAt(80))} près du pôle, où les étoiles avancent plus lentement (post-traitement ${PROCESSING_LABELS[state.processing]}, ` +
+      `selon la focale et le capteur). À l’œil nu, on verrait jusqu’à la magnitude ${fmt1(s.limit)}.`
     el.focalEq.textContent = focalEquivalentText(state)
     // Les champs de saisie suivent les curseurs, sauf pendant qu'on y tape.
     setNum(el.focalNum, Math.round(state.focalMm))
@@ -484,6 +520,36 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     draw()
   }
   el.roll.addEventListener('input', () => setRoll(Number(el.roll.value)))
+  // Molette sur la vue : focale, à pas fins si les crans sont espacés, larges s'ils s'enchaînent.
+  let lastWheel = 0
+  el.canvas.addEventListener(
+    'wheel',
+    (e) => {
+      if (e.deltaY === 0) return
+      e.preventDefault()
+      const now = performance.now()
+      const focal = focalAfterWheel(state.focalMm, -e.deltaY, now - lastWheel)
+      lastWheel = now
+      if (focal === state.focalMm) return
+      state.focalMm = focal
+      syncInputs()
+      scheduleSky()
+      rememberSettings()
+      draw()
+    },
+    { passive: false }
+  )
+  // A / E : tonneau, d'un degré entier par appui (répété si la touche reste enfoncée).
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase()
+    if ((k !== 'a' && k !== 'e') || e.ctrlKey || e.altKey || e.metaKey || el.root.hidden) return
+    const a = document.activeElement
+    if ((a instanceof HTMLInputElement && a.type !== 'range') || a instanceof HTMLSelectElement || a instanceof HTMLTextAreaElement) return
+    e.preventDefault()
+    setRoll(Math.round(state.roll) + (k === 'e' ? -1 : 1))
+    syncInputs()
+    renderHud()
+  })
   bindNumber(el.rollNum, setRoll)
   bindNumber(el.reliefDistNum, (km) => {
     state.reliefDistance = clampReliefDistance(km * 1000)

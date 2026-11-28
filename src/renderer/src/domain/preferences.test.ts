@@ -36,8 +36,8 @@ describe('préférences de la vue', () => {
   })
 
   it('ramène les valeurs hors limites dans les bornes', () => {
-    const p = sanitizePreferences({ focalMm: 2000, durationMin: 1, starCount: 99_999 })
-    expect(p.focalMm).toBe(600)
+    const p = sanitizePreferences({ focalMm: 5000, durationMin: 1, starCount: 99_999 })
+    expect(p.focalMm).toBe(2000)
     expect(p.durationMin).toBe(5)
     expect(p.starCount).toBe(15000)
   })
