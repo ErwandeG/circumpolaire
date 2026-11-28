@@ -122,9 +122,10 @@
               </div>
               <div class="ctrl">
                 <div class="ctrl-head">
-                  <span class="ctrl-label">Pollution lumineuse <span class="help" tabindex="0" title="Selon l’atlas de David Lorenz (2025, satellite VIIRS) : plus le ciel du lieu est éclairé, plus les étoiles faibles disparaissent de la photo et plus l’horizon jaunit. Même réglage que sur la carte. Désactivée : ciel naturel, sans aucune lumière artificielle.">?</span></span>
+                  <span class="ctrl-label">Pollution lumineuse <button class="help" type="button" aria-expanded="false" aria-controls="help-lp" aria-label="Aide">?</button></span>
                   <button id="lp-on" class="switch" type="button" role="switch" aria-checked="false" aria-label="Pollution lumineuse"><span class="switch-knob"></span></button>
                 </div>
+                <p id="help-lp" class="ctrl-hint help-text" hidden>Selon l’atlas de David Lorenz (2025, satellite VIIRS) : plus le ciel du lieu est éclairé, plus les étoiles faibles disparaissent de la photo et plus l’horizon jaunit. Même réglage que sur la carte. Désactivée : ciel naturel, sans aucune lumière artificielle.</p>
                 <div class="sky-gauge" aria-hidden="true">
                   <div class="sky-gauge-bar"><span id="sky-gauge-mark" class="sky-gauge-mark"></span></div>
                   <div class="sky-gauge-ends"><span>Ciel noir</span><span>Centre-ville</span></div>
@@ -133,13 +134,14 @@
               </div>
               <div class="ctrl">
                 <div class="ctrl-head">
-                  <span class="ctrl-label">Post-traitement <span class="help" tabindex="0" title="Retouche que vous comptez faire sur la photo finale. Plus elle est poussée, plus les filés faibles ressortent du fond de ciel, et plus il y a d’étoiles visibles.">?</span></span>
+                  <span class="ctrl-label">Post-traitement <button class="help" type="button" aria-expanded="false" aria-controls="help-proc" aria-label="Aide">?</button></span>
                   <div class="seg seg-small" role="group" aria-label="Post-traitement de la photo">
                     <button id="proc-raw" type="button" title="Photo telle qu’elle sort de l’appareil, sans retouche">Aucun</button>
                     <button id="proc-standard" type="button" title="Empilement des images et réglage des courbes">Léger</button>
                     <button id="proc-pushed" type="button" title="Soustraction du fond de ciel, étirement fort">Avancé</button>
                   </div>
                 </div>
+                <p id="help-proc" class="ctrl-hint help-text" hidden>Retouche que vous comptez faire sur la photo finale. Plus elle est poussée, plus les filés faibles ressortent du fond de ciel, et plus il y a d’étoiles visibles.</p>
                 <p id="proc-help" class="ctrl-hint"></p>
               </div>
               <details class="more">

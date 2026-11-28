@@ -254,6 +254,16 @@ export function setupSkyView(el: SkyElements, onClose: () => void): SkyView {
     deltaTimer = window.setTimeout(() => (el.starsDelta.hidden = true), 4000)
   }
 
+  // Boutons « ? » : un clic déplie ou replie l'explication sous le réglage.
+  for (const button of document.querySelectorAll<HTMLButtonElement>('button.help[aria-controls]')) {
+    const help = document.getElementById(button.getAttribute('aria-controls') ?? '')
+    if (!help) continue
+    button.addEventListener('click', () => {
+      help.hidden = !help.hidden
+      button.setAttribute('aria-expanded', String(!help.hidden))
+    })
+  }
+
   // Même réglage que l'interrupteur de la carte principale : les deux restent synchronisés.
   el.lpOn.addEventListener('click', () => setLightPollutionOn(!isLightPollutionOn()))
   onLightPollutionChange((on) => {

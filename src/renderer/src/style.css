@@ -1210,13 +1210,16 @@ body {
   font-weight: 700;
   color: #cbd5e1;
   border: 1px solid #64748b;
+  padding: 0;
+  background: none;
   border-radius: 50%;
-  cursor: help;
+  cursor: pointer;
   vertical-align: 1px;
 }
 
 .help:hover,
-.help:focus-visible {
+.help:focus-visible,
+.help[aria-expanded='true'] {
   color: #0f172a;
   background: #cbd5e1;
   outline: none;
@@ -1253,6 +1256,14 @@ body {
   justify-content: space-between;
   font-size: 10px;
   color: #64748b;
+}
+
+.help-text {
+  padding: 4px 6px;
+  color: #cbd5e1;
+  background: rgb(148 163 184 / 0.1);
+  border-left: 2px solid #64748b;
+  border-radius: 2px;
 }
 
 .more {
